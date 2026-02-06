@@ -5,7 +5,7 @@ import re
 from supabase import create_client, Client
 
 # ==========================================
-# 1. ตั้งค่าหน้าเว็บ (ต้องเป็นบรรทัดแรกๆ และไม่มี @)
+# 1. ตั้งค่าหน้าเว็บ (ต้องเป็นบรรทัดแรกของ st และไม่มี @)
 # ==========================================
 st.set_page_config(page_title="Dashboard สรุปยอดขาย", layout="wide")
 
@@ -189,3 +189,4 @@ except Exception as e:
     st.error(f"❌ เกิดข้อผิดพลาด: {e}")
 
     st.info("💡 คำแนะนำ: ตรวจสอบชื่อ Table ใน Supabase ต้องชื่อว่า 'orders' (ตัวเล็กหมด)")
+
