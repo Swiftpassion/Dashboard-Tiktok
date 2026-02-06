@@ -22,33 +22,63 @@ def init_connection():
 # ==========================================
 # 2. ฟังก์ชันดึงข้อมูล (Load Data)
 # ==========================================
-@st.cache_data(ttl=300) # จำข้อมูลไว้ 5 นาที
+@st.cache_data(ttl=300)
 def load_data():
     supabase = init_connection()
     
-    # ดึงคอลัมน์ที่จำเป็น (ใช้ "" ครอบชื่อที่มีเว้นวรรค)
-    # ถ้าชื่อใน Supabase เป็นตัวเล็กหมด ให้แก้ตรงนี้เป็นตัวเล็กครับ
+    # --- DEBUG STEP 1: ลองดึงแบบชื่อตรงๆ (Quoted) ---
     try:
+        # ใช้ "" ครอบชื่อที่มีเว้นวรรค
         response = supabase.table('orders').select(
             '"Shipped Time", "Warehouse Name", "Seller SKU", "Product Name", "Quantity"'
         ).execute()
-        df = pd.DataFrame(response.data)
-    except:
-        # กรณี Supabase แปลงชื่อเป็นตัวเล็กอัตโนมัติ (Fallback)
+        st.success("✅ เชื่อมต่อ Database สำเร็จ (เจอคอลัมน์แบบตัวใหญ่)")
+        return pd.DataFrame(response.data)
+        
+    except Exception as e1:
+        # ถ้าพัง ให้ลองแบบที่ 2
+        # st.warning(f"⚠️ แบบที่ 1 ไม่ผ่าน: {e1}") # ปิดไว้ก่อนจะได้ไม่รก
+        pass
+
+    # --- DEBUG STEP 2: ลองดึงแบบชื่อตัวเล็ก (Snake Case) ---
+    try:
         response = supabase.table('orders').select(
             'shipped_time, warehouse_name, seller_sku, product_name, quantity'
         ).execute()
+        
+        st.success("✅ เชื่อมต่อ Database สำเร็จ (เจอคอลัมน์แบบตัวเล็ก)")
         df = pd.DataFrame(response.data)
-        # เปลี่ยนชื่อกลับให้ตรงกับ Logic
-        df.rename(columns={
+        
+        # เปลี่ยนชื่อกลับให้ Code ส่วนอื่นทำงานต่อได้
+        rename_dict = {
             'shipped_time': 'Shipped Time',
             'warehouse_name': 'Warehouse Name',
             'seller_sku': 'Seller SKU',
             'product_name': 'Product Name',
             'quantity': 'Quantity'
-        }, inplace=True)
+        }
+        # เช็คก่อนว่ามีคอลัมน์ให้เปลี่ยนไหม
+        df.rename(columns={k:v for k,v in rename_dict.items() if k in df.columns}, inplace=True)
+        return df
+
+    except Exception as e2:
+        # --- DEBUG STEP 3: ถ้าพังทั้งคู่ ให้แสดง Error ตัวแดง ---
+        st.error("❌ ดึงข้อมูลไม่ได้ทั้ง 2 แบบ")
+        st.error(f"Error แบบที่ 1: {e1}")
+        st.error(f"Error แบบที่ 2: {e2}")
         
-    return df
+        # แถม: ลองดึงข้อมูลทั้งหมดมาดูชื่อคอลัมน์จริงๆ
+        try:
+            test_response = supabase.table('orders').select("*").limit(1).execute()
+            if test_response.data:
+                st.write("🔍 **ชื่อคอลัมน์จริงๆ ใน Database คือ:**")
+                st.write(list(test_response.data[0].keys()))
+            else:
+                st.write("⚠️ ตาราง orders ว่างเปล่า (ไม่มีข้อมูล)")
+        except Exception as e3:
+            st.error(f"⚠️ ไม่สามารถเข้าถึงตาราง orders ได้เลย (อาจจะใส่ชื่อตารางผิด หรือลืมใส่ Secrets): {e3}")
+            
+        return pd.DataFrame() # ส่งค่าว่างกลับไป กันโปรแกรมพัง
 
 # ==========================================
 # 3. Logic การแปลงข้อมูล (Business Logic)
@@ -189,4 +219,5 @@ except Exception as e:
     st.error(f"❌ เกิดข้อผิดพลาด: {e}")
 
     st.info("💡 คำแนะนำ: ตรวจสอบชื่อ Table ใน Supabase ต้องชื่อว่า 'orders' (ตัวเล็กหมด)")
+
 
