@@ -5,10 +5,13 @@ import re
 from supabase import create_client, Client
 
 # ==========================================
-# 1. ตั้งค่าการเชื่อมต่อ (Connect to Supabase)
+# 1. ตั้งค่าหน้าเว็บ (ต้องเป็นบรรทัดแรกๆ และไม่มี @)
 # ==========================================
-@st.set_page_config(page_title="Dashboard สรุปยอดขาย", layout="wide")
+st.set_page_config(page_title="Dashboard สรุปยอดขาย", layout="wide")
 
+# ==========================================
+# 2. เชื่อมต่อ Supabase
+# ==========================================
 @st.cache_resource
 def init_connection():
     # ดึง Key จาก Secrets ของ Streamlit
@@ -184,4 +187,5 @@ try:
 
 except Exception as e:
     st.error(f"❌ เกิดข้อผิดพลาด: {e}")
+
     st.info("💡 คำแนะนำ: ตรวจสอบชื่อ Table ใน Supabase ต้องชื่อว่า 'orders' (ตัวเล็กหมด)")
