@@ -10,36 +10,34 @@ import datetime
 # ==========================================
 st.set_page_config(page_title="Sales Dashboard", layout="wide")
 
-# CSS Styling: ปรับแต่ง Widget ของ Streamlit ให้กลายเป็น Header สวยๆ
 st.markdown("""
 <style>
+    /* Import Font: Kanit (ทั่วไป) และ Sarabun (สำหรับหัวข้อวันที่) */
     @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap');
     
     html, body, [class*="css"] {
         font-family: 'Kanit', sans-serif;
-        background-color: #0f1115; /* สีพื้นหลังหลัก */
+        background-color: #0f1115;
         color: white;
     }
 
-    /* ซ่อน Header มาตรฐานของ Streamlit */
+    /* ซ่อน Header มาตรฐาน */
     header {visibility: hidden;}
     .block-container {
-        padding-top: 2rem !important;
+        padding-top: 1.5rem !important;
         padding-bottom: 0rem !important;
     }
 
-    /* --- 1. ปรับแต่ง Date Input (วันที่) ให้เป็นตัวหนังสือใหญ่ๆ --- */
-    
-    /* ซ่อน Label คำว่า "Select Date" เดิม */
+    /* --- 1. ปรับแต่ง Date Input --- */
     div[data-testid="stDateInput"] label {
         display: none;
     }
     
-    /* ปรับแต่งกล่อง Input ให้พื้นหลังใส และตัวหนังสือใหญ่ */
     div[data-baseweb="input"] {
         background-color: transparent !important;
         border: none !important;
-        border-bottom: 4px solid #ff7043 !important; /* เส้นขีดล่างสีส้มหนา */
+        border-bottom: 4px solid #ff7043 !important;
         border-radius: 0px !important;
     }
 
@@ -47,58 +45,61 @@ st.markdown("""
         padding: 0px !important;
     }
 
-    /* ปรับตัวเลขวันที่ภายใน */
     input[class*="st-"] {
         color: #ffffff !important;
-        font-size: 36px !important; /* ตัวใหญ่สะใจตามรูป */
+        font-size: 36px !important;
         font-weight: 700 !important;
         font-family: 'Kanit', sans-serif !important;
-        padding-bottom: 10px !important;
         height: auto !important;
     }
     
-    /* ไอคอนปฏิทิน */
     div[data-baseweb="input"] svg {
-        fill: #ff7043 !important; /* เปลี่ยนไอคอนเป็นสีส้ม */
-        width: 24px !important;
-        height: 24px !important;
+        fill: #ff7043 !important;
+        width: 28px !important;
+        height: 28px !important;
     }
 
-    /* --- 2. ปรับแต่ง Radio Button (Shop Selector) --- */
+    /* --- 2. ปรับแต่ง Radio Button (Shop Selector) ให้ใหญ่สะใจ --- */
     div[role="radiogroup"] {
         display: flex;
         flex-direction: row;
         align-items: center;
-        gap: 15px;
-        padding-top: 15px; /* ดันลงมาให้ตรงกับบรรทัดวันที่ */
+        gap: 25px; /* เพิ่มระยะห่าง */
+        padding-top: 10px;
     }
 
-    /* ปรับตัวเลือกแต่ละตัว */
+    /* ขยายขนาด Font */
     div[data-testid="stRadio"] label {
-        font-size: 20px !important;
+        font-size: 26px !important; /* ใหญ่ขึ้น */
         color: #a0a0a0 !important;
         cursor: pointer;
     }
 
-    /* เมื่อเอาเมาส์ชี้ หรือ ถูกเลือก */
     div[data-testid="stRadio"] label:hover, 
     div[data-testid="stRadio"] label[data-checked="true"] {
         color: #ffffff !important;
         font-weight: 600 !important;
     }
 
-    /* สร้างวงกลมสีส้มสำหรับตัวที่เลือก */
+    /* ขยายวงกลม Radio ให้ใหญ่ขึ้นด้วยการ Scale */
+    div[data-testid="stRadio"] label div[role="radio"] {
+        transform: scale(1.3); /* ขยายวงกลม 30% */
+        margin-right: 10px;
+    }
+
     div[role="radiogroup"] div[data-checked="true"] div:first-child {
         background-color: #ff7043 !important;
         border-color: #ff7043 !important;
     }
     
-    /* ปรับแต่งส่วนหัว "ช่วงวันที่ขายสินค้า" ที่เราจะสร้างด้วย st.markdown */
-    .custom-label {
-        font-size: 18px;
+    /* --- Custom Labels --- */
+    /* ใช้ฟอนต์ TH Sarabun (Sarabun) ตามที่ขอ */
+    .date-header-label {
+        font-family: 'Sarabun', sans-serif;
+        font-size: 24px;
         color: #a0a0a0;
-        margin-bottom: -15px; /* ดึง Date Input ให้ขยับขึ้นมาใกล้ๆ */
-        font-weight: 300;
+        margin-bottom: -15px;
+        font-weight: 400;
     }
 
 </style>
@@ -160,13 +161,12 @@ df_raw = load_data()
 if not df_raw.empty:
     df = process_data(df_raw)
 
-    # --- ส่วน Header (สร้าง Layout 2 คอลัมน์) ---
-    # ใช้ st.columns เพื่อจัดให้ Date อยู่ซ้าย และ Shop อยู่ขวา ในบรรทัดเดียวกัน
-    c_date, c_space, c_shop = st.columns([2, 0.5, 2])
+    # Header Layout
+    c_date, c_space, c_shop = st.columns([2, 0.2, 2.5])
     
     with c_date:
-        # ใส่ Label เองเพราะเราซ่อน Label ของ Widget ไปแล้ว
-        st.markdown('<div class="custom-label">ช่วงวันที่ขายสินค้า</div>', unsafe_allow_html=True)
+        # ใช้ class ที่ตั้งค่า font Sarabun ไว้
+        st.markdown('<div class="date-header-label">ช่วงวันที่ขายสินค้า</div>', unsafe_allow_html=True)
         
         valid_dates = df['Date'].dropna().sort_values()
         if not valid_dates.empty:
@@ -174,7 +174,6 @@ if not df_raw.empty:
         else:
             min_d, max_d = datetime.date.today(), datetime.date.today()
 
-        # Date Input (หน้าตาจะถูกเปลี่ยนโดย CSS ด้านบนให้เป็นตัวหนังสือใหญ่)
         date_range = st.date_input(
             "Select Date", 
             value=[min_d, max_d],
@@ -187,16 +186,14 @@ if not df_raw.empty:
             start_date, end_date = min_d, max_d
 
     with c_shop:
-        # Shop Selector (CSS จะจัดให้เป็นแนวนอนและวางตำแหน่งขวา)
-        # ดันลงมานิดนึงเพื่อให้ตรงกับฐานตัวหนังสือวันที่
         st.write("") 
         st.write("") 
         shop_options = ['All Shops'] + sorted(df['Shop'].unique().tolist())
         selected_shop_ui = st.radio(
-            "Shop", # Label นี้จะถูกซ่อนถ้าต้องการ หรือปล่อยไว้เล็กๆ
+            "Shop", 
             shop_options,
             horizontal=True,
-            label_visibility="collapsed" # ซ่อน Label คำว่า "Shop"
+            label_visibility="collapsed"
         )
 
     # Filter Logic
@@ -207,24 +204,29 @@ if not df_raw.empty:
     filtered_df = df.loc[mask]
 
     # ==========================================
-    # 5. HTML/JS View (Only Chart & Table)
+    # 5. HTML/JS View (Chart & Split Tables)
     # ==========================================
-    # ตัดส่วน Header ออกจาก HTML เพราะเราใช้ Widget จริงแสดงผลด้านบนแล้ว
     
     if not filtered_df.empty:
-        # เตรียมข้อมูลตาราง Top 20
-        top10_df = filtered_df.groupby('Clean_SKU')['Quantity'].sum().reset_index().sort_values('Quantity', ascending=False).head(20)
-        top10_rows_html = ""
-        for idx, row in top10_df.iterrows():
-            icon = ' <span class="trophy-icon">🏆</span>' if idx == top10_df.index[0] else ''
-            top10_rows_html += f"<tr><td>{icon}{row['Clean_SKU']}</td><td>{row['Quantity']:,}</td></tr>"
+        # --- 1. Top Best Seller (20 items) ---
+        top_df = filtered_df.groupby('Clean_SKU')['Quantity'].sum().reset_index().sort_values('Quantity', ascending=False).head(20)
+        top_rows_html = ""
+        for idx, row in top_df.iterrows():
+            icon = ' <span class="trophy-icon">🏆</span>' if idx == top_df.index[0] else ''
+            top_rows_html += f"<tr><td>{icon}{row['Clean_SKU']}</td><td>{row['Quantity']:,}</td></tr>"
 
-        # เตรียมข้อมูลกราฟ
-        chart_df = top10_df.head(10)
+        # --- 2. Lower Seller (Bottom 10 items) ---
+        lower_df = filtered_df.groupby('Clean_SKU')['Quantity'].sum().reset_index().sort_values('Quantity', ascending=True).head(10)
+        lower_rows_html = ""
+        for idx, row in lower_df.iterrows():
+            lower_rows_html += f"<tr><td>{row['Clean_SKU']}</td><td>{row['Quantity']:,}</td></tr>"
+
+        # --- 3. Chart Data (Top 10) ---
+        chart_df = top_df.head(10)
         labels_js = json.dumps(chart_df['Clean_SKU'].tolist())
         data_values_js = json.dumps(chart_df['Quantity'].tolist())
         
-        # สีหลากสี
+        # Color Palette
         color_palette = [
             '#ffab91', '#81d4fa', '#b39ddb', '#ffcc80', '#a5d6a7', 
             '#f48fb1', '#80cbc4', '#ce93d8', '#ffab40', '#90caf9',
@@ -236,7 +238,8 @@ if not df_raw.empty:
         bg_colors_js = json.dumps(bg_colors)
 
     else:
-        top10_rows_html = "<tr><td>ไม่พบข้อมูล</td><td>-</td></tr>"
+        top_rows_html = "<tr><td>ไม่พบข้อมูล</td><td>-</td></tr>"
+        lower_rows_html = "<tr><td>ไม่พบข้อมูล</td><td>-</td></tr>"
         labels_js, data_values_js, bg_colors_js = "[]", "[]", "[]"
 
     html_code = """
@@ -253,49 +256,78 @@ if not df_raw.empty:
             font-family: 'Kanit', sans-serif;
             background-color: #0f1115;
             margin: 0;
-            padding: 0; /* ตัด Padding ออก เพราะ Header อยู่ที่ Streamlit แล้ว */
+            padding: 0;
             color: #ffffff;
             box-sizing: border-box;
             overflow-x: hidden;
+            overflow-y: hidden; /* ป้องกัน scroll ของ body */
         }
 
-        /* Dashboard Layout */
+        /* Grid หลัก */
         .dashboard-container {
             display: grid;
             grid-template-columns: 2fr 1fr;
-            gap: 30px;
+            gap: 20px;
             margin-top: 10px;
+            height: 95vh; /* ใช้ความสูงเกือบเต็มจอ */
         }
 
-        /* Chart Area */
+        /* --- Chart Area --- */
+        .chart-area {
+            display: flex;
+            flex-direction: column;
+        }
+        
         .chart-title {
             color: #a0a0a0;
             font-size: 16px;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
         }
 
-        /* Table Area */
+        /* --- Sidebar Area (Flexbox เพื่อแบ่ง 3/4 และ 1/4) --- */
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            height: 100%; /* สูงเต็มพื้นที่ */
+        }
+
         .ranking-box {
             background-color: #d9d9d9;
             border-radius: 4px;
             overflow: hidden;
             display: flex;
             flex-direction: column;
-            height: 800px;
+        }
+
+        /* Top Seller: กินพื้นที่ 3 ส่วน (75%) */
+        .ranking-box.top-seller {
+            flex: 3; 
+        }
+
+        /* Lower Seller: กินพื้นที่ 1 ส่วน (25%) */
+        .ranking-box.lower-seller {
+            flex: 1; 
         }
 
         .ranking-header {
-            background-color: #ffccbc;
+            background-color: #ffccbc; /* สีส้มพีช */
             color: #000000;
             text-align: center;
-            padding: 15px;
+            padding: 10px;
             font-size: 18px;
             font-weight: 600;
+            flex-shrink: 0; /* หัวตารางห้ามหด */
+        }
+        
+        /* เปลี่ยนสีหัวตาราง Lower Seller ให้ต่างกัน (สีฟ้า) */
+        .ranking-header.lower {
+            background-color: #81d4fa; 
         }
 
         .table-scroll {
             overflow-y: auto;
-            flex-grow: 1;
+            flex-grow: 1; /* ส่วนเนื้อหาขยายเต็มพื้นที่ที่เหลือ */
         }
 
         .ranking-table {
@@ -305,7 +337,7 @@ if not df_raw.empty:
 
         .ranking-table th {
             text-align: left;
-            padding: 10px 15px;
+            padding: 8px 12px;
             background-color: #cfd8dc;
             color: #000;
             font-size: 14px;
@@ -316,7 +348,7 @@ if not df_raw.empty:
         .ranking-table th:last-child { text-align: right; }
 
         .ranking-table td {
-            padding: 10px 15px;
+            padding: 8px 12px;
             color: #000;
             border-bottom: 1px solid #ccc;
             font-size: 14px;
@@ -326,10 +358,10 @@ if not df_raw.empty:
         .ranking-table td:last-child { text-align: right; }
         .trophy-icon { margin-right: 5px; color: #cca000; }
 
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 8px; }
+        /* Scrollbar styling */
+        ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #2c2c2c; }
-        ::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
     </style>
 </head>
 <body>
@@ -337,14 +369,15 @@ if not df_raw.empty:
     <div class="dashboard-container">
         <div class="chart-area">
             <div class="chart-title">ยอดขายสินค้า (__SELECTED_SHOP__)</div>
-            <div style="height: 700px; width: 100%;">
+            <div style="flex-grow: 1; position: relative; min-height: 0;">
                 <canvas id="salesChart"></canvas>
             </div>
         </div>
 
         <div class="sidebar">
-            <div class="ranking-box">
-                <div class="ranking-header">TOP 20 Best Seller</div>
+            
+            <div class="ranking-box top-seller">
+                <div class="ranking-header">TOP Best Seller</div>
                 <div class="table-scroll">
                     <table class="ranking-table">
                         <thead>
@@ -354,11 +387,29 @@ if not df_raw.empty:
                             </tr>
                         </thead>
                         <tbody>
-                            __TABLE_ROWS__
+                            __TOP_ROWS__
                         </tbody>
                     </table>
                 </div>
             </div>
+
+            <div class="ranking-box lower-seller">
+                <div class="ranking-header lower">⬇ Lower Seller</div>
+                <div class="table-scroll">
+                    <table class="ranking-table">
+                        <thead>
+                            <tr>
+                                <th>สินค้า</th>
+                                <th>จำนวน</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            __LOWER_ROWS__
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
         </div>
     </div>
 
@@ -384,7 +435,7 @@ if not df_raw.empty:
             options: {
                 indexAxis: 'y',
                 responsive: true,
-                maintainAspectRatio: false,
+                maintainAspectRatio: false, // สำคัญเพื่อให้ยืดหยุ่นตามกล่อง
                 plugins: { legend: { display: false } },
                 scales: {
                     x: {
@@ -404,12 +455,13 @@ if not df_raw.empty:
 """
 
     html_code = html_code.replace("__SELECTED_SHOP__", selected_shop_ui)
-    html_code = html_code.replace("__TABLE_ROWS__", top10_rows_html)
+    html_code = html_code.replace("__TOP_ROWS__", top_rows_html)
+    html_code = html_code.replace("__LOWER_ROWS__", lower_rows_html)
     html_code = html_code.replace("__CHART_LABELS__", labels_js)
     html_code = html_code.replace("__CHART_DATA__", data_values_js)
     html_code = html_code.replace("__CHART_COLORS__", bg_colors_js)
 
-    components.html(html_code, height=1600, scrolling=False) # scrolling=False เพื่อไม่ให้มี scrollbar ซ้อน
+    components.html(html_code, height=1200, scrolling=False)
 
 else:
     st.warning("No Data found in Supabase")
