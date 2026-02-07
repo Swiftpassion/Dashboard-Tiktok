@@ -23,33 +23,33 @@ st.markdown("""
         padding-bottom: 0rem !important;
     }
 
-    /* --- 1. ปรับแต่ง Date Input (ให้เป็นตัวหนังสือใหญ่) --- */
+    /* --- 1. ปรับแต่ง Date Input (แก้ไข: ลดขนาดลง) --- */
     div[data-testid="stDateInput"] label { display: none; }
     
     div[data-baseweb="input"] {
         background-color: transparent !important;
         border: none !important;
-        border-bottom: 4px solid #ff7043 !important; /* เส้นขีดล่างสีส้ม */
+        border-bottom: 3px solid #ff7043 !important; /* ลดความหนาเส้นลงนิดหน่อย */
         border-radius: 0px !important;
     }
 
     div[data-baseweb="input"] > div { padding: 0px !important; }
 
-    /* ปรับขนาดตัวเลขวันที่ */
+    /* ปรับขนาดตัวเลขวันที่ (จาก 36px -> 30px) */
     input[class*="st-"] {
         color: #ffffff !important;
-        font-size: 36px !important; /* ขนาดตัวอักษรใหญ่ */
+        font-size: 30px !important; /* แก้ไข: ลดขนาดตัวอักษร */
         font-weight: 700 !important;
         font-family: 'Kanit', sans-serif !important;
         height: auto !important;
         padding-bottom: 5px !important;
     }
     
-    /* ไอคอนปฏิทิน */
+    /* ไอคอนปฏิทิน (จาก 28px -> 24px) */
     div[data-baseweb="input"] svg {
         fill: #ff7043 !important;
-        width: 28px !important;
-        height: 28px !important;
+        width: 24px !important;
+        height: 24px !important;
     }
 
     /* --- 2. ปรับแต่ง Radio Button (ตัวเลือกร้านค้า) --- */
@@ -90,9 +90,9 @@ st.markdown("""
     /* หัวข้อ "ช่วงวันที่ขายสินค้า" */
     .date-header-label {
         font-family: 'Sarabun', sans-serif;
-        font-size: 24px;
+        font-size: 22px; /* ลดขนาดหัวข้อลงเล็กน้อยให้สมดุล */
         color: #a0a0a0;
-        margin-bottom: -15px;
+        margin-bottom: -10px;
         font-weight: 400;
     }
 
@@ -166,11 +166,13 @@ if not df_raw.empty:
         else:
             min_d, max_d = datetime.date.today(), datetime.date.today()
 
+        # แก้ไข: เพิ่ม format="DD/MM/YYYY"
         date_range = st.date_input(
             "Select Date", 
             value=[min_d, max_d],
             min_value=min_d,
-            max_value=max_d
+            max_value=max_d,
+            format="DD/MM/YYYY" 
         )
         if len(date_range) == 2:
             start_date, end_date = date_range
