@@ -15,25 +15,20 @@ st.markdown("""
     @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap');
     @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap');
     
-    html, body, [class*="css"] {
-        font-family: 'Kanit', sans-serif;
-        background-color: #0f1115;
-        color: white;
-    }
+    /* ลบส่วน FORCE DARK MODE ออกแล้ว เพราะใช้ config.toml แทน */
 
-    header {visibility: hidden;}
+    /* --- 1. ปรับแต่ง Date Input (ให้ตัวหนังสือใหญ่และไม่มีกรอบ) --- */
     .block-container {
         padding-top: 1.5rem !important;
         padding-bottom: 0rem !important;
     }
 
-    /* --- 1. Date Input Styling --- */
     div[data-testid="stDateInput"] label { display: none; }
     
     div[data-baseweb="input"] {
         background-color: transparent !important;
         border: none !important;
-        border-bottom: 4px solid #ff7043 !important;
+        border-bottom: 4px solid #ff7043 !important; /* เส้นสีส้ม */
         border-radius: 0px !important;
     }
 
@@ -41,7 +36,7 @@ st.markdown("""
 
     input[class*="st-"] {
         color: #ffffff !important;
-        font-size: 36px !important;
+        font-size: 36px !important; /* วันที่ตัวใหญ่ */
         font-weight: 700 !important;
         font-family: 'Kanit', sans-serif !important;
         height: auto !important;
@@ -53,18 +48,18 @@ st.markdown("""
         height: 28px !important;
     }
 
-    /* --- 2. Radio Button (Shop Selector) Styling --- */
+    /* --- 2. ปรับแต่ง Radio Button (Shop Selector) --- */
     div[role="radiogroup"] {
         display: flex;
         flex-direction: row;
         align-items: center;
         gap: 25px;
         padding-top: 10px;
-        flex-wrap: wrap; /* ให้ปัดบรรทัดได้ถ้าจอเล็กมาก */
+        flex-wrap: wrap;
     }
 
     div[data-testid="stRadio"] label {
-        font-size: 26px !important;
+        font-size: 26px !important; /* ตัวเลือกร้านตัวใหญ่ */
         color: #a0a0a0 !important;
         cursor: pointer;
     }
@@ -78,6 +73,7 @@ st.markdown("""
     div[data-testid="stRadio"] label div[role="radio"] {
         transform: scale(1.3);
         margin-right: 10px;
+        border-color: #a0a0a0 !important;
     }
 
     div[role="radiogroup"] div[data-checked="true"] div:first-child {
@@ -211,12 +207,12 @@ if not df_raw.empty:
         for idx, row in lower_df.iterrows():
             lower_rows_html += f"<tr><td>{row['Clean_SKU']}</td><td>{row['Quantity']:,}</td></tr>"
 
-        # --- 3. Chart Data (Change to Top 20) ---
-        chart_df = top_df.head(20) # แก้ไขตรงนี้เป็น 20 ตามที่ขอ
+        # --- 3. Chart Data (Top 20) ---
+        chart_df = top_df.head(20)
         labels_js = json.dumps(chart_df['Clean_SKU'].tolist())
         data_values_js = json.dumps(chart_df['Quantity'].tolist())
         
-        # Color Palette (More colors needed for 20 items)
+        # Color Palette
         color_palette = [
             '#ffab91', '#81d4fa', '#b39ddb', '#ffcc80', '#a5d6a7', 
             '#f48fb1', '#80cbc4', '#ce93d8', '#ffab40', '#90caf9',
@@ -250,32 +246,30 @@ if not df_raw.empty:
             padding: 0;
             color: #ffffff;
             box-sizing: border-box;
-            overflow: hidden; /* ให้ Scrollbar จัดการที่ภายใน div แทน */
+            overflow: hidden; 
         }
 
-        /* --- Responsive Grid Layout --- */
+        /* --- Grid Layout --- */
         .dashboard-container {
             display: grid;
-            /* Default: Laptop/Desktop (ซ้าย 65%, ขวา 35%) เพื่อความสมดุล */
             grid-template-columns: 65% 35%; 
             gap: 20px;
             margin-top: 10px;
-            height: 98vh; /* เต็มความสูงหน้าจอ */
+            height: 98vh; /* ความสูงเต็มจอ */
             width: 100%;
         }
 
-        /* iPad / Tablet (Portrait) or Small Laptop */
         @media screen and (max-width: 1024px) {
             .dashboard-container {
-                grid-template-columns: 1fr; /* เปลี่ยนเป็น 1 คอลัมน์ (ซ้อนกัน) */
-                height: auto; /* ความสูงตามเนื้อหา */
+                grid-template-columns: 1fr;
+                height: auto;
                 overflow-y: auto;
             }
             .chart-area {
-                height: 600px !important; /* ฟิกซ์ความสูงกราฟเมื่อเป็นแนวตั้ง */
+                height: 600px !important;
             }
             .sidebar {
-                height: 800px !important; /* ฟิกซ์ความสูงตารางเมื่อเป็นแนวตั้ง */
+                height: 800px !important;
             }
         }
 
@@ -283,8 +277,6 @@ if not df_raw.empty:
         .chart-area {
             display: flex;
             flex-direction: column;
-            /* พื้นหลังและขอบเพื่อให้ดูเป็นสัดส่วน */
-            /* border-right: 1px solid #333; */
             padding-right: 10px;
             height: 100%;
         }
@@ -308,6 +300,7 @@ if not df_raw.empty:
             flex-direction: column;
             gap: 15px;
             height: 100%;
+            min-height: 500px;
         }
 
         .ranking-box {
@@ -318,9 +311,17 @@ if not df_raw.empty:
             flex-direction: column;
         }
 
-        /* Flex Ratio: Top 75%, Lower 25% */
-        .ranking-box.top-seller { flex: 3; }
-        .ranking-box.lower-seller { flex: 1; }
+        /* Top Seller (2/3 พื้นที่) */
+        .ranking-box.top-seller { 
+            flex: 2; 
+            min-height: 200px; 
+        }
+        
+        /* Lower Seller (1/3 พื้นที่) */
+        .ranking-box.lower-seller { 
+            flex: 1; 
+            min-height: 150px; 
+        }
 
         .ranking-header {
             background-color: #ffccbc;
@@ -337,6 +338,7 @@ if not df_raw.empty:
         .table-scroll {
             overflow-y: auto;
             flex-grow: 1;
+            min-height: 0; 
         }
 
         .ranking-table {
@@ -385,7 +387,6 @@ if not df_raw.empty:
         </div>
 
         <div class="sidebar">
-            
             <div class="ranking-box top-seller">
                 <div class="ranking-header">TOP Best Seller</div>
                 <div class="table-scroll">
@@ -419,7 +420,6 @@ if not df_raw.empty:
                     </table>
                 </div>
             </div>
-
         </div>
     </div>
 
@@ -438,16 +438,14 @@ if not df_raw.empty:
                     label: 'Sales',
                     data: dataValues,
                     backgroundColor: bgColors,
-                    // เอา barThickness แบบ fix ออก เพื่อให้กราฟคำนวณความหนาเองตามขนาดหน้าจอ
-                    // barThickness: 25, 
-                    maxBarThickness: 40, // กำหนดความหนาสูงสุดแทน
+                    maxBarThickness: 40,
                     borderRadius: 4
                 }]
             },
             options: {
                 indexAxis: 'y',
                 responsive: true,
-                maintainAspectRatio: false, // สำคัญ! ให้กราฟยืดหดตาม Container
+                maintainAspectRatio: false,
                 plugins: { legend: { display: false } },
                 layout: {
                     padding: { right: 20 }
@@ -462,7 +460,7 @@ if not df_raw.empty:
                         ticks: { 
                             color: '#a0a0a0', 
                             font: { family: 'Kanit', size: 12 },
-                            autoSkip: false // บังคับโชว์ชื่อสินค้าทุกบรรทัด (20 รายการ)
+                            autoSkip: false
                         }
                     }
                 }
@@ -480,8 +478,8 @@ if not df_raw.empty:
     html_code = html_code.replace("__CHART_DATA__", data_values_js)
     html_code = html_code.replace("__CHART_COLORS__", bg_colors_js)
 
-    # ปรับ height ให้ยืดหยุ่น (Viewport) แต่กำหนด minimum ไว้กันย่อจนน่าเกลียด
-    components.html(html_code, height=1100, scrolling=True)
+    # ปรับความสูง component ให้เหมาะสม
+    components.html(html_code, height=1200, scrolling=True)
 
 else:
     st.warning("No Data found in Supabase")
