@@ -131,9 +131,9 @@ if not df_raw.empty:
         else:
             min_d, max_d = datetime.date.today(), datetime.date.today()
 
-        # Date Input (CSS จะทำให้พื้นหลังใส)
+        # Date Input
         date_range = st.date_input(
-            "Select Date", # Label นี้จะถูกซ่อนด้วย CSS
+            "Select Date",
             value=[min_d, max_d],
             min_value=min_d,
             max_value=max_d
@@ -142,6 +142,9 @@ if not df_raw.empty:
             start_date, end_date = date_range
         else:
             start_date, end_date = min_d, max_d
+            
+        # สร้าง string วันที่เพื่อไปแสดงใน HTML
+        date_display_str = f"{start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')}"
 
     with c_shop:
         # Shop Selector
@@ -161,160 +164,266 @@ if not df_raw.empty:
     filtered_df = df.loc[mask]
 
     # ==========================================
-    # 5. HTML/JS View (Transparent Background)
+    # 5. HTML/JS View (Dynamic Data Injection)
     # ==========================================
     
-    # ... (ส่วนคำนวณข้อมูลเหมือนเดิม) ...
     if not filtered_df.empty:
+        # 1. เตรียมข้อมูลตาราง Top 20
         top10_df = filtered_df.groupby('Clean_SKU')['Quantity'].sum().reset_index().sort_values('Quantity', ascending=False).head(20)
         top10_rows_html = ""
         for idx, row in top10_df.iterrows():
-            icon = ' <span class="icon-gold">🏆</span>' if idx == top10_df.index[0] else ''
+            # ใส่ไอคอนถ้วยรางวัลแค่แถวแรก
+            icon = ' <span class="trophy-icon">🏆</span>' if idx == top10_df.index[0] else ''
             top10_rows_html += f"<tr><td>{icon}{row['Clean_SKU']}</td><td>{row['Quantity']:,}</td></tr>"
 
-        lower_df = filtered_df.groupby('Clean_SKU')['Quantity'].sum().reset_index().sort_values('Quantity', ascending=True).head(7)
-        lower_rows_html = ""
-        for idx, row in lower_df.iterrows():
-            lower_rows_html += f"<tr><td>{row['Clean_SKU']}</td><td>{row['Quantity']:,}</td></tr>"
-
-        chart_products = top10_df['Clean_SKU'].tolist()
-        pivot_df = filtered_df[filtered_df['Clean_SKU'].isin(chart_products)].groupby(['Clean_SKU', 'Shop'])['Quantity'].sum().unstack(fill_value=0)
-        pivot_df = pivot_df.reindex(chart_products)
-
-        labels_js = json.dumps(chart_products)
-        data_namkang = json.dumps(pivot_df['Namkang'].tolist() if 'Namkang' in pivot_df.columns else [0]*len(chart_products))
-        data_sim1 = json.dumps(pivot_df['SIM1'].tolist() if 'SIM1' in pivot_df.columns else [0]*len(chart_products))
-        data_sim2 = json.dumps(pivot_df['SIM2'].tolist() if 'SIM2' in pivot_df.columns else [0]*len(chart_products))
+        # 2. เตรียมข้อมูลกราฟ (Chart.js)
+        # เอา Top 10 ตัวแรกมาแสดงในกราฟ
+        chart_df = top10_df.head(10) 
+        labels_js = json.dumps(chart_df['Clean_SKU'].tolist())
+        data_values_js = json.dumps(chart_df['Quantity'].tolist())
+        
     else:
         top10_rows_html = "<tr><td>ไม่พบข้อมูล</td><td>-</td></tr>"
-        lower_rows_html = "<tr><td>ไม่พบข้อมูล</td><td>-</td></tr>"
-        labels_js, data_namkang, data_sim1, data_sim2 = "[]", "[]", "[]", "[]"
+        labels_js = "[]"
+        data_values_js = "[]"
+        date_display_str += " (ไม่พบข้อมูล)"
 
-    html_code = f"""
-    <!DOCTYPE html>
-    <html lang="th">
-    <head>
-        <meta charset="UTF-8">
-        <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap" rel="stylesheet">
-        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-        <style>
-            :root {{
-                --primary-orange: #ffab91; --primary-orange-text: #ff7043;
-                --header-orange: #ffccbc; --header-blue: #81d4fa;
-                --bar-purple: #b39ddb; --bar-darkblue: #3f51b5; --bar-orange: #ffab91;
-            }}
-            /* [สำคัญ] ปรับ body ให้พื้นหลังใส (transparent) 
-               เพื่อให้กลืนไปกับพื้นหลังของ Streamlit 
-            */
-            body {{ 
-                font-family: 'Kanit', sans-serif; 
-                background-color: transparent; 
-                margin: 0; padding: 0; color: #333; overflow-x: hidden; 
-            }}
-            
-            /* ส่วนอื่นคงเดิม แต่เอาพื้นหลังขาวออกจากบางจุด */
-            .dashboard-container {{ display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-top: 10px; }}
-            .chart-area {{ padding-right: 20px; }}
-            .chart-header {{ margin-bottom: 10px; }}
-            .chart-title {{ font-size: 14px; color: #999; margin-bottom: 5px; }}
-            
-            .legend-container {{ display: flex; gap: 15px; font-size: 12px; align-items: center; margin-bottom: 10px; }}
-            .legend-item {{ display: flex; align-items: center; gap: 5px; }}
-            .dot {{ width: 10px; height: 10px; border-radius: 50%; }}
-            .dot.namkang {{ background-color: var(--bar-purple); }}
-            .dot.sim1 {{ background-color: var(--bar-darkblue); }}
-            .dot.sim2 {{ background-color: var(--bar-orange); }}
-            
-            /* Ranking Box พื้นหลังขาวเฉพาะตัวกล่อง */
-            .ranking-box {{ 
-                border: 1px solid #eee; margin-bottom: 20px; 
-                background-color: rgba(255, 255, 255, 0.8); /* ขาวโปร่งแสงนิดๆ */
-            }}
-            .ranking-header {{ padding: 10px; text-align: center; font-weight: 600; font-size: 14px; }}
-            .header-top {{ background-color: var(--header-orange); }}
-            .header-lower {{ background-color: var(--header-blue); color: #fff; }}
-            .ranking-table {{ width: 100%; border-collapse: collapse; }}
-            .ranking-table th {{ text-align: left; padding: 8px; border-bottom: 2px solid #333; font-size: 11px; }}
-            .ranking-table th:last-child {{ text-align: right; }}
-            .ranking-table td {{ padding: 6px 8px; border-bottom: 1px solid #f0f0f0; color: #444; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }}
-            .ranking-table td:last-child {{ text-align: right; }}
-            .icon-gold {{ color: #d4af37; }}
-        </style>
-    </head>
-    <body>
-        <div class="dashboard-container">
-            <div class="chart-area">
-                <div class="chart-header">
-                    <div class="chart-title">ยอดขายสินค้า ({selected_shop_ui})</div>
-                    <div class="legend-container">
-                        <strong>SHOP</strong>
-                        <div class="legend-item"><span class="dot namkang"></span> Namkang</div>
-                        <div class="legend-item"><span class="dot sim1"></span> SIM1</div>
-                        <div class="legend-item"><span class="dot sim2"></span> SIM2</div>
-                    </div>
-                </div>
-                <div style="height: 700px; width: 100%;">
-                    <canvas id="salesChart"></canvas>
-                </div>
+    # HTML Template (ใช้ตัวแปรแทนที่ค่า Hardcoded)
+    html_code = """
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sales Dashboard Dark Mode</title>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            --bg-dark: #0f1115;
+            --text-white: #ffffff;
+            --text-gray: #a0a0a0;
+            --accent-orange: #ff7043;
+            --bar-salmon: #ffab91;
+            --table-header-bg: #ffccbc;
+            --table-text-black: #000000;
+        }
+
+        body {
+            font-family: 'Kanit', sans-serif;
+            background-color: var(--bg-dark);
+            margin: 0;
+            padding: 20px;
+            color: var(--text-white);
+            box-sizing: border-box;
+            overflow-x: hidden; /* ป้องกัน scroll แนวนอนเกินจำเป็น */
+        }
+
+        /* --- Header Section --- */
+        .top-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-bottom: 30px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #333;
+        }
+
+        .date-section {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            padding-bottom: 5px;
+        }
+
+        .date-label {
+            font-size: 18px;
+            color: var(--text-gray);
+            font-weight: 300;
+        }
+
+        .date-display {
+            font-size: 28px;
+            font-weight: 500;
+            color: var(--text-white);
+            position: relative;
+            padding-bottom: 10px;
+        }
+
+        .date-display::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: 100%;
+            height: 3px;
+            background-color: var(--accent-orange);
+        }
+
+        /* Dashboard Grid */
+        .dashboard-container {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 30px;
+        }
+
+        /* Chart Area */
+        .chart-title {
+            color: var(--text-gray);
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+
+        /* Table Area */
+        .ranking-box {
+            background-color: #d9d9d9;
+            border-radius: 4px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 600px;
+        }
+
+        .ranking-header {
+            background-color: var(--table-header-bg);
+            color: var(--table-text-black);
+            text-align: center;
+            padding: 15px;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .table-scroll {
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+
+        .ranking-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .ranking-table th {
+            text-align: left;
+            padding: 10px 15px;
+            background-color: #cfd8dc;
+            color: #000;
+            font-size: 14px;
+            font-weight: 600;
+            position: sticky; top: 0;
+        }
+        
+        .ranking-table th:last-child { text-align: right; }
+
+        .ranking-table td {
+            padding: 10px 15px;
+            color: #000;
+            border-bottom: 1px solid #ccc;
+            font-size: 14px;
+            background-color: #e0e0e0;
+        }
+
+        .ranking-table td:last-child { text-align: right; }
+        .trophy-icon { margin-right: 5px; color: #cca000; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #2c2c2c; }
+        ::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+    <div class="top-header">
+        <div class="date-section">
+            <div class="date-label">ช่วงวันที่ขายสินค้า</div>
+            <div class="date-display">__DATE_DISPLAY__</div>
+        </div>
+        <div style="font-size: 18px; color: #a0a0a0;">
+            SHOP: <span style="color: #fff; font-weight: bold;">__SELECTED_SHOP__</span>
+        </div>
+    </div>
+
+    <div class="dashboard-container">
+        
+        <div class="chart-area">
+            <div class="chart-title">ยอดขายสินค้า (__SELECTED_SHOP__)</div>
+            <div style="height: 550px; width: 100%;">
+                <canvas id="salesChart"></canvas>
             </div>
+        </div>
 
-            <div class="sidebar">
-                <div class="ranking-box">
-                    <div class="ranking-header header-top">TOP 20 Best Seller</div>
+        <div class="sidebar">
+            <div class="ranking-box">
+                <div class="ranking-header">TOP 20 Best Seller</div>
+                <div class="table-scroll">
                     <table class="ranking-table">
-                        <thead><tr><th>สินค้า</th><th>จำนวน</th></tr></thead>
-                        <tbody>{top10_rows_html}</tbody>
-                    </table>
-                </div>
-                <div class="ranking-box">
-                    <div class="ranking-header header-lower">
-                         <span>⬇</span> Lower Seller <span>⬇</span>
-                    </div>
-                    <table class="ranking-table">
-                        <thead><tr><th>สินค้า</th><th>จำนวน</th></tr></thead>
-                        <tbody>{lower_rows_html}</tbody>
+                        <thead>
+                            <tr>
+                                <th>สินค้า</th>
+                                <th>จำนวน</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            __TABLE_ROWS__
+                        </tbody>
                     </table>
                 </div>
             </div>
         </div>
+    </div>
 
-        <script>
-            const ctx = document.getElementById('salesChart').getContext('2d');
-            new Chart(ctx, {{
-                type: 'bar',
-                data: {{
-                    labels: {labels_js},
-                    datasets: [
-                        {{ label: 'Namkang', data: {data_namkang}, backgroundColor: '#b39ddb', barThickness: 15, borderRadius: 2 }},
-                        {{ label: 'SIM1', data: {data_sim1}, backgroundColor: '#3f51b5', barThickness: 15, borderRadius: 2 }},
-                        {{ label: 'SIM2', data: {data_sim2}, backgroundColor: '#ffab91', barThickness: 15, borderRadius: 2 }}
-                    ]
-                }},
-                options: {{
-                    indexAxis: 'y',
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {{ legend: {{ display: false }} }},
-                    scales: {{
-                        x: {{ 
-                            stacked: true, 
-                            position: 'bottom', 
-                            grid: {{ color: 'rgba(0,0,0,0.05)' }} /* เส้นตารางจางๆ */
-                        }},
-                        y: {{ 
-                            stacked: true, 
-                            grid: {{ display: false }}, 
-                            ticks: {{ font: {{ family: 'Kanit' }}, autoSkip: false }} 
-                        }}
-                    }}
-                }}
-            }});
-        </script>
-    </body>
-    </html>
-    """
+    <script>
+        const ctx = document.getElementById('salesChart').getContext('2d');
+        
+        // จุดที่ 3: แทรกข้อมูลกราฟ
+        const labels = __CHART_LABELS__;
+        const dataValues = __CHART_DATA__;
 
-    components.html(html_code, height=1200, scrolling=True)
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Sales',
+                    data: dataValues,
+                    backgroundColor: '#ffab91',
+                    barThickness: 25,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: {
+                        grid: { color: '#333' },
+                        ticks: { color: '#a0a0a0', font: { family: 'Kanit' } }
+                    },
+                    y: {
+                        grid: { display: false },
+                        ticks: { color: '#a0a0a0', font: { family: 'Kanit', size: 14 } }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
+"""
+
+    # --- ส่วนสำคัญ: นำข้อมูลจาก Python ไปแทนที่ Placeholder ใน HTML ---
+    html_code = html_code.replace("__DATE_DISPLAY__", date_display_str)
+    html_code = html_code.replace("__SELECTED_SHOP__", selected_shop_ui)
+    html_code = html_code.replace("__TABLE_ROWS__", top10_rows_html)
+    html_code = html_code.replace("__CHART_LABELS__", labels_js)
+    html_code = html_code.replace("__CHART_DATA__", data_values_js)
+
+    # แสดงผล
+    components.html(html_code, height=900, scrolling=True)
 
 else:
     st.warning("No Data found in Supabase")
