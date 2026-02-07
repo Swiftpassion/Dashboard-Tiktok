@@ -12,7 +12,6 @@ st.set_page_config(page_title="Sales Dashboard", layout="wide")
 
 st.markdown("""
 <style>
-    /* Import Font: Kanit (ทั่วไป) และ Sarabun (สำหรับหัวข้อวันที่) */
     @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap');
     @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap');
     
@@ -22,17 +21,14 @@ st.markdown("""
         color: white;
     }
 
-    /* ซ่อน Header มาตรฐาน */
     header {visibility: hidden;}
     .block-container {
         padding-top: 1.5rem !important;
         padding-bottom: 0rem !important;
     }
 
-    /* --- 1. ปรับแต่ง Date Input --- */
-    div[data-testid="stDateInput"] label {
-        display: none;
-    }
+    /* --- 1. Date Input Styling --- */
+    div[data-testid="stDateInput"] label { display: none; }
     
     div[data-baseweb="input"] {
         background-color: transparent !important;
@@ -41,9 +37,7 @@ st.markdown("""
         border-radius: 0px !important;
     }
 
-    div[data-baseweb="input"] > div {
-        padding: 0px !important;
-    }
+    div[data-baseweb="input"] > div { padding: 0px !important; }
 
     input[class*="st-"] {
         color: #ffffff !important;
@@ -59,18 +53,18 @@ st.markdown("""
         height: 28px !important;
     }
 
-    /* --- 2. ปรับแต่ง Radio Button (Shop Selector) ให้ใหญ่สะใจ --- */
+    /* --- 2. Radio Button (Shop Selector) Styling --- */
     div[role="radiogroup"] {
         display: flex;
         flex-direction: row;
         align-items: center;
-        gap: 25px; /* เพิ่มระยะห่าง */
+        gap: 25px;
         padding-top: 10px;
+        flex-wrap: wrap; /* ให้ปัดบรรทัดได้ถ้าจอเล็กมาก */
     }
 
-    /* ขยายขนาด Font */
     div[data-testid="stRadio"] label {
-        font-size: 26px !important; /* ใหญ่ขึ้น */
+        font-size: 26px !important;
         color: #a0a0a0 !important;
         cursor: pointer;
     }
@@ -81,9 +75,8 @@ st.markdown("""
         font-weight: 600 !important;
     }
 
-    /* ขยายวงกลม Radio ให้ใหญ่ขึ้นด้วยการ Scale */
     div[data-testid="stRadio"] label div[role="radio"] {
-        transform: scale(1.3); /* ขยายวงกลม 30% */
+        transform: scale(1.3);
         margin-right: 10px;
     }
 
@@ -93,7 +86,6 @@ st.markdown("""
     }
     
     /* --- Custom Labels --- */
-    /* ใช้ฟอนต์ TH Sarabun (Sarabun) ตามที่ขอ */
     .date-header-label {
         font-family: 'Sarabun', sans-serif;
         font-size: 24px;
@@ -165,9 +157,7 @@ if not df_raw.empty:
     c_date, c_space, c_shop = st.columns([2, 0.2, 2.5])
     
     with c_date:
-        # ใช้ class ที่ตั้งค่า font Sarabun ไว้
         st.markdown('<div class="date-header-label">ช่วงวันที่ขายสินค้า</div>', unsafe_allow_html=True)
-        
         valid_dates = df['Date'].dropna().sort_values()
         if not valid_dates.empty:
             min_d, max_d = valid_dates.iloc[0], valid_dates.iloc[-1]
@@ -221,16 +211,17 @@ if not df_raw.empty:
         for idx, row in lower_df.iterrows():
             lower_rows_html += f"<tr><td>{row['Clean_SKU']}</td><td>{row['Quantity']:,}</td></tr>"
 
-        # --- 3. Chart Data (Top 10) ---
-        chart_df = top_df.head(10)
+        # --- 3. Chart Data (Change to Top 20) ---
+        chart_df = top_df.head(20) # แก้ไขตรงนี้เป็น 20 ตามที่ขอ
         labels_js = json.dumps(chart_df['Clean_SKU'].tolist())
         data_values_js = json.dumps(chart_df['Quantity'].tolist())
         
-        # Color Palette
+        # Color Palette (More colors needed for 20 items)
         color_palette = [
             '#ffab91', '#81d4fa', '#b39ddb', '#ffcc80', '#a5d6a7', 
             '#f48fb1', '#80cbc4', '#ce93d8', '#ffab40', '#90caf9',
-            '#ef9a9a', '#b0bec5', '#fff59d', '#bcaaa4', '#e6ee9c'
+            '#ef9a9a', '#b0bec5', '#fff59d', '#bcaaa4', '#e6ee9c',
+            '#ff8a65', '#4fc3f7', '#9575cd', '#ffd54f', '#81c784' 
         ]
         bg_colors = []
         for i in range(len(chart_df)):
@@ -259,23 +250,43 @@ if not df_raw.empty:
             padding: 0;
             color: #ffffff;
             box-sizing: border-box;
-            overflow-x: hidden;
-            overflow-y: hidden; /* ป้องกัน scroll ของ body */
+            overflow: hidden; /* ให้ Scrollbar จัดการที่ภายใน div แทน */
         }
 
-        /* Grid หลัก */
+        /* --- Responsive Grid Layout --- */
         .dashboard-container {
             display: grid;
-            grid-template-columns: 2fr 1fr;
+            /* Default: Laptop/Desktop (ซ้าย 65%, ขวา 35%) เพื่อความสมดุล */
+            grid-template-columns: 65% 35%; 
             gap: 20px;
             margin-top: 10px;
-            height: 95vh; /* ใช้ความสูงเกือบเต็มจอ */
+            height: 98vh; /* เต็มความสูงหน้าจอ */
+            width: 100%;
+        }
+
+        /* iPad / Tablet (Portrait) or Small Laptop */
+        @media screen and (max-width: 1024px) {
+            .dashboard-container {
+                grid-template-columns: 1fr; /* เปลี่ยนเป็น 1 คอลัมน์ (ซ้อนกัน) */
+                height: auto; /* ความสูงตามเนื้อหา */
+                overflow-y: auto;
+            }
+            .chart-area {
+                height: 600px !important; /* ฟิกซ์ความสูงกราฟเมื่อเป็นแนวตั้ง */
+            }
+            .sidebar {
+                height: 800px !important; /* ฟิกซ์ความสูงตารางเมื่อเป็นแนวตั้ง */
+            }
         }
 
         /* --- Chart Area --- */
         .chart-area {
             display: flex;
             flex-direction: column;
+            /* พื้นหลังและขอบเพื่อให้ดูเป็นสัดส่วน */
+            /* border-right: 1px solid #333; */
+            padding-right: 10px;
+            height: 100%;
         }
         
         .chart-title {
@@ -284,12 +295,19 @@ if not df_raw.empty:
             margin-bottom: 10px;
         }
 
-        /* --- Sidebar Area (Flexbox เพื่อแบ่ง 3/4 และ 1/4) --- */
+        .chart-wrapper {
+            flex-grow: 1;
+            position: relative;
+            min-height: 0;
+            width: 100%;
+        }
+
+        /* --- Sidebar Area (Tables) --- */
         .sidebar {
             display: flex;
             flex-direction: column;
             gap: 15px;
-            height: 100%; /* สูงเต็มพื้นที่ */
+            height: 100%;
         }
 
         .ranking-box {
@@ -300,34 +318,25 @@ if not df_raw.empty:
             flex-direction: column;
         }
 
-        /* Top Seller: กินพื้นที่ 3 ส่วน (75%) */
-        .ranking-box.top-seller {
-            flex: 3; 
-        }
-
-        /* Lower Seller: กินพื้นที่ 1 ส่วน (25%) */
-        .ranking-box.lower-seller {
-            flex: 1; 
-        }
+        /* Flex Ratio: Top 75%, Lower 25% */
+        .ranking-box.top-seller { flex: 3; }
+        .ranking-box.lower-seller { flex: 1; }
 
         .ranking-header {
-            background-color: #ffccbc; /* สีส้มพีช */
+            background-color: #ffccbc;
             color: #000000;
             text-align: center;
-            padding: 10px;
+            padding: 12px;
             font-size: 18px;
             font-weight: 600;
-            flex-shrink: 0; /* หัวตารางห้ามหด */
+            flex-shrink: 0;
         }
         
-        /* เปลี่ยนสีหัวตาราง Lower Seller ให้ต่างกัน (สีฟ้า) */
-        .ranking-header.lower {
-            background-color: #81d4fa; 
-        }
+        .ranking-header.lower { background-color: #81d4fa; }
 
         .table-scroll {
             overflow-y: auto;
-            flex-grow: 1; /* ส่วนเนื้อหาขยายเต็มพื้นที่ที่เหลือ */
+            flex-grow: 1;
         }
 
         .ranking-table {
@@ -343,6 +352,7 @@ if not df_raw.empty:
             font-size: 14px;
             font-weight: 600;
             position: sticky; top: 0;
+            z-index: 10;
         }
         
         .ranking-table th:last-child { text-align: right; }
@@ -358,7 +368,7 @@ if not df_raw.empty:
         .ranking-table td:last-child { text-align: right; }
         .trophy-icon { margin-right: 5px; color: #cca000; }
 
-        /* Scrollbar styling */
+        /* Scrollbar */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #2c2c2c; }
         ::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
@@ -368,8 +378,8 @@ if not df_raw.empty:
 
     <div class="dashboard-container">
         <div class="chart-area">
-            <div class="chart-title">ยอดขายสินค้า (__SELECTED_SHOP__)</div>
-            <div style="flex-grow: 1; position: relative; min-height: 0;">
+            <div class="chart-title">ยอดขายสินค้า (__SELECTED_SHOP__) - Top 20</div>
+            <div class="chart-wrapper">
                 <canvas id="salesChart"></canvas>
             </div>
         </div>
@@ -428,15 +438,20 @@ if not df_raw.empty:
                     label: 'Sales',
                     data: dataValues,
                     backgroundColor: bgColors,
-                    barThickness: 25,
+                    // เอา barThickness แบบ fix ออก เพื่อให้กราฟคำนวณความหนาเองตามขนาดหน้าจอ
+                    // barThickness: 25, 
+                    maxBarThickness: 40, // กำหนดความหนาสูงสุดแทน
                     borderRadius: 4
                 }]
             },
             options: {
                 indexAxis: 'y',
                 responsive: true,
-                maintainAspectRatio: false, // สำคัญเพื่อให้ยืดหยุ่นตามกล่อง
+                maintainAspectRatio: false, // สำคัญ! ให้กราฟยืดหดตาม Container
                 plugins: { legend: { display: false } },
+                layout: {
+                    padding: { right: 20 }
+                },
                 scales: {
                     x: {
                         grid: { color: '#333' },
@@ -444,7 +459,11 @@ if not df_raw.empty:
                     },
                     y: {
                         grid: { display: false },
-                        ticks: { color: '#a0a0a0', font: { family: 'Kanit', size: 14 } }
+                        ticks: { 
+                            color: '#a0a0a0', 
+                            font: { family: 'Kanit', size: 12 },
+                            autoSkip: false // บังคับโชว์ชื่อสินค้าทุกบรรทัด (20 รายการ)
+                        }
                     }
                 }
             }
@@ -461,7 +480,8 @@ if not df_raw.empty:
     html_code = html_code.replace("__CHART_DATA__", data_values_js)
     html_code = html_code.replace("__CHART_COLORS__", bg_colors_js)
 
-    components.html(html_code, height=1200, scrolling=False)
+    # ปรับ height ให้ยืดหยุ่น (Viewport) แต่กำหนด minimum ไว้กันย่อจนน่าเกลียด
+    components.html(html_code, height=1100, scrolling=True)
 
 else:
     st.warning("No Data found in Supabase")
