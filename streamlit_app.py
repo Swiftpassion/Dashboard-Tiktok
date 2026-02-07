@@ -10,10 +10,10 @@ import datetime
 # ==========================================
 st.set_page_config(page_title="Sales Dashboard", layout="wide")
 
-# CSS: ปรับแต่งให้ "โปร่งใส" (Transparent) และดู Clean ที่สุด
+# CSS: ปรับแต่ง Streamlit ให้สอดคล้องกับหน้าเว็บจำลอง
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap');
     
     html, body, [class*="css"] {
         font-family: 'Kanit', sans-serif;
@@ -22,43 +22,57 @@ st.markdown("""
     /* ซ่อน Header ปกติของ Streamlit */
     header {visibility: hidden;}
     
-    /* 1. ปรับ Date Input ให้พื้นหลังใส และเหลือแค่เส้นขอบล่างบางๆ (Minimal) */
-    div[data-baseweb="input"] {
-        background-color: transparent !important; /* พื้นหลังใส */
-        border: none !important;
-        border-bottom: 2px solid #ff7043 !important; /* เหลือแค่ขอบล่างสีส้ม */
-        border-radius: 0px !important;
-        color: #333 !important;
+    /* ซ่อน Padding ด้านบน เพื่อให้ HTML Header ของเราอยู่บนสุด */
+    .block-container {
+        padding-top: 1rem !important;
+        padding-bottom: 0rem !important;
     }
     
-    /* ปรับตัว Text ภายใน Input */
+    /* --- ปรับแต่ง Date Input ของ Streamlit --- */
+    /* ซ่อน Label ของ Date Input เพื่อไม่ให้ซ้อนกับ Header ใหญ่ของเรา */
     div[data-testid="stDateInput"] label {
-        display: none; /* ซ่อน Label คำว่า "ช่วงวันที่" ออกไปเลยเพื่อความคลีน */
+        display: none;
     }
 
-    /* 2. ปรับ Radio Button (Shop Selector) ให้พื้นหลังใส */
+    /* ปรับตัว Input ให้ดู Minimal (พื้นหลังใส) */
+    div[data-baseweb="input"] {
+        background-color: rgba(255, 255, 255, 0.05) !important;
+        border: 1px solid #333 !important;
+        border-radius: 4px !important;
+        color: #fff !important;
+    }
+    
+    /* ไอคอนปฏิทินสีขาว */
+    div[data-baseweb="input"] svg {
+        fill: #fff !important;
+    }
+
+    /* --- ปรับแต่ง Radio Button (Shop Selector) --- */
     div.row-widget.stRadio > div {
-        background-color: transparent;
-        gap: 10px;
+        flex-direction: row;
+        gap: 20px;
+        align-items: center;
     }
     
     div.row-widget.stRadio > div > label {
         background-color: transparent;
-        border: 1px solid #ddd;
-        border-radius: 20px !important; /* ปรับเป็นวงรีมนๆ */
-        padding: 5px 20px;
-        transition: all 0.3s;
-    }
-    
-    div.row-widget.stRadio > div > label:hover {
-        border-color: #ff7043;
-        color: #ff7043;
+        color: #888; /* สีเทาตอนยังไม่เลือก */
+        font-size: 18px !important;
     }
 
-    /* Active State ของปุ่มเลือก Shop */
+    /* เปลี่ยนสีเมื่อ Hover หรือ Active */
+    div.row-widget.stRadio > div > label:hover {
+        color: #fff;
+    }
+
+    /* Active State (Streamlit จัดการยากเล็กน้อย แต่ใช้ CSS ช่วยได้ระดับหนึ่ง) */
     div.row-widget.stRadio > div > label[data-checked="true"] {
+        color: #fff !important;
+        font-weight: bold;
+    }
+    /* ทำวงกลมสีส้มเลียนแบบ (Custom Radio Icon) */
+    div.row-widget.stRadio > div > label[data-checked="true"] > div:first-child {
         background-color: #ff7043 !important;
-        color: white !important;
         border-color: #ff7043 !important;
     }
 
@@ -121,19 +135,21 @@ df_raw = load_data()
 if not df_raw.empty:
     df = process_data(df_raw)
 
-    # จัด Layout ส่วนควบคุม (Controls)
-    c_date, c_space, c_shop = st.columns([1.5, 0.5, 2])
+    # --- ส่วน Controls (ซ่อนให้เนียนที่สุด) ---
+    # ใช้ Columns เพื่อจัดตำแหน่ง Input ของ Streamlit ให้ตรงกับ Layout ที่เราจะวาดใน HTML
+    c1, c2 = st.columns([1, 1])
     
-    with c_date:
+    with c1:
         valid_dates = df['Date'].dropna().sort_values()
         if not valid_dates.empty:
             min_d, max_d = valid_dates.iloc[0], valid_dates.iloc[-1]
         else:
             min_d, max_d = datetime.date.today(), datetime.date.today()
 
-        # Date Input
+        # Date Input (Label ถูกซ่อนด้วย CSS ด้านบน)
+        # ผู้ใช้ยังกดเลือกวันที่ตรงนี้ได้ แต่ Header ใหญ่จะแสดงใน HTML
         date_range = st.date_input(
-            "Select Date",
+            "Select Date", 
             value=[min_d, max_d],
             min_value=min_d,
             max_value=max_d
@@ -143,11 +159,11 @@ if not df_raw.empty:
         else:
             start_date, end_date = min_d, max_d
             
-        # สร้าง string วันที่เพื่อไปแสดงใน HTML
+        # สร้าง string วันที่เพื่อไปแสดงใน HTML (Header ใหญ่)
         date_display_str = f"{start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')}"
 
-    with c_shop:
-        # Shop Selector
+    with c2:
+        # Shop Selector (Streamlit Native แต่ปรับ CSS ให้คล้าย)
         shop_options = ['All Shops'] + sorted(df['Shop'].unique().tolist())
         selected_shop_ui = st.radio(
             "Shop",
@@ -172,23 +188,36 @@ if not df_raw.empty:
         top10_df = filtered_df.groupby('Clean_SKU')['Quantity'].sum().reset_index().sort_values('Quantity', ascending=False).head(20)
         top10_rows_html = ""
         for idx, row in top10_df.iterrows():
-            # ใส่ไอคอนถ้วยรางวัลแค่แถวแรก
             icon = ' <span class="trophy-icon">🏆</span>' if idx == top10_df.index[0] else ''
             top10_rows_html += f"<tr><td>{icon}{row['Clean_SKU']}</td><td>{row['Quantity']:,}</td></tr>"
 
         # 2. เตรียมข้อมูลกราฟ (Chart.js)
-        # เอา Top 10 ตัวแรกมาแสดงในกราฟ
-        chart_df = top10_df.head(10) 
+        chart_df = top10_df.head(10)
         labels_js = json.dumps(chart_df['Clean_SKU'].tolist())
         data_values_js = json.dumps(chart_df['Quantity'].tolist())
         
+        # --- สร้างชุดสี (Colorful Palette) ---
+        # รายการสีที่จะวนใช้ในกราฟ
+        color_palette = [
+            '#ffab91', '#81d4fa', '#b39ddb', '#ffcc80', '#a5d6a7', 
+            '#f48fb1', '#80cbc4', '#ce93d8', '#ffab40', '#90caf9',
+            '#ef9a9a', '#b0bec5', '#fff59d', '#bcaaa4', '#e6ee9c'
+        ]
+        # สร้าง list สีให้ครบจำนวนข้อมูล
+        bg_colors = []
+        for i in range(len(chart_df)):
+            bg_colors.append(color_palette[i % len(color_palette)])
+        
+        bg_colors_js = json.dumps(bg_colors)
+
     else:
         top10_rows_html = "<tr><td>ไม่พบข้อมูล</td><td>-</td></tr>"
         labels_js = "[]"
         data_values_js = "[]"
+        bg_colors_js = "[]"
         date_display_str += " (ไม่พบข้อมูล)"
 
-    # HTML Template (ใช้ตัวแปรแทนที่ค่า Hardcoded)
+    # HTML Template
     html_code = """
 <!DOCTYPE html>
 <html lang="th">
@@ -196,7 +225,7 @@ if not df_raw.empty:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sales Dashboard Dark Mode</title>
-    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
@@ -217,48 +246,58 @@ if not df_raw.empty:
             padding: 20px;
             color: var(--text-white);
             box-sizing: border-box;
-            overflow-x: hidden; /* ป้องกัน scroll แนวนอนเกินจำเป็น */
+            overflow-x: hidden;
         }
 
-        /* --- Header Section --- */
+        /* --- Header Section (Custom Large) --- */
         .top-header {
             display: flex;
             justify-content: space-between;
             align-items: flex-end;
-            margin-bottom: 30px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid #333;
+            margin-bottom: 40px;
+            /* เอา padding-top เพื่อดันหนี Input ของ Streamlit นิดหน่อย */
+            padding-top: 10px; 
         }
 
         .date-section {
             display: flex;
             flex-direction: column;
             gap: 5px;
-            padding-bottom: 5px;
         }
 
         .date-label {
-            font-size: 18px;
-            color: var(--text-gray);
-            font-weight: 300;
+            font-size: 20px; /* Label สีเทาด้านบน */
+            color: #888;
+            font-weight: 400;
+            margin-bottom: 5px;
         }
 
         .date-display {
-            font-size: 28px;
-            font-weight: 500;
+            font-size: 48px; /* ตัวหนังสือใหญ่ตามขอ */
+            font-weight: 700; /* ตัวหนา */
             color: var(--text-white);
             position: relative;
-            padding-bottom: 10px;
+            padding-bottom: 15px;
+            line-height: 1.2;
         }
 
+        /* เส้นขีดเส้นใต้สีส้ม หนาๆ */
         .date-display::after {
             content: '';
             position: absolute;
             left: 0;
             bottom: 0;
             width: 100%;
-            height: 3px;
+            height: 5px; /* เส้นหนาขึ้น */
             background-color: var(--accent-orange);
+            border-radius: 2px;
+        }
+
+        /* ส่วน Shop Selector (ใน HTML เป็นแค่ Text Display เพราะปุ่มจริงอยู่ข้างบน) */
+        .shop-display {
+            font-size: 20px; 
+            color: #a0a0a0;
+            padding-bottom: 15px; /* จัดให้ตรงแนว */
         }
 
         /* Dashboard Grid */
@@ -266,6 +305,7 @@ if not df_raw.empty:
             display: grid;
             grid-template-columns: 2fr 1fr;
             gap: 30px;
+            margin-top: 20px;
         }
 
         /* Chart Area */
@@ -282,7 +322,7 @@ if not df_raw.empty:
             overflow: hidden;
             display: flex;
             flex-direction: column;
-            height: 600px;
+            height: 800px; /* เพิ่มความสูงตาราง */
         }
 
         .ranking-header {
@@ -340,8 +380,9 @@ if not df_raw.empty:
             <div class="date-label">ช่วงวันที่ขายสินค้า</div>
             <div class="date-display">__DATE_DISPLAY__</div>
         </div>
-        <div style="font-size: 18px; color: #a0a0a0;">
-            SHOP: <span style="color: #fff; font-weight: bold;">__SELECTED_SHOP__</span>
+        
+        <div class="shop-display">
+            Current View: <span style="color: #fff; font-weight: bold;">__SELECTED_SHOP__</span>
         </div>
     </div>
 
@@ -349,7 +390,7 @@ if not df_raw.empty:
         
         <div class="chart-area">
             <div class="chart-title">ยอดขายสินค้า (__SELECTED_SHOP__)</div>
-            <div style="height: 550px; width: 100%;">
+            <div style="height: 700px; width: 100%;">
                 <canvas id="salesChart"></canvas>
             </div>
         </div>
@@ -377,9 +418,9 @@ if not df_raw.empty:
     <script>
         const ctx = document.getElementById('salesChart').getContext('2d');
         
-        // จุดที่ 3: แทรกข้อมูลกราฟ
         const labels = __CHART_LABELS__;
         const dataValues = __CHART_DATA__;
+        const bgColors = __CHART_COLORS__; // รับค่าสีมาจาก Python
 
         new Chart(ctx, {
             type: 'bar',
@@ -388,7 +429,7 @@ if not df_raw.empty:
                 datasets: [{
                     label: 'Sales',
                     data: dataValues,
-                    backgroundColor: '#ffab91',
+                    backgroundColor: bgColors, // ใช้สีหลากหลาย
                     barThickness: 25,
                     borderRadius: 4
                 }]
@@ -415,15 +456,16 @@ if not df_raw.empty:
 </html>
 """
 
-    # --- ส่วนสำคัญ: นำข้อมูลจาก Python ไปแทนที่ Placeholder ใน HTML ---
+    # --- แทนที่ Placeholder ---
     html_code = html_code.replace("__DATE_DISPLAY__", date_display_str)
     html_code = html_code.replace("__SELECTED_SHOP__", selected_shop_ui)
     html_code = html_code.replace("__TABLE_ROWS__", top10_rows_html)
     html_code = html_code.replace("__CHART_LABELS__", labels_js)
     html_code = html_code.replace("__CHART_DATA__", data_values_js)
+    html_code = html_code.replace("__CHART_COLORS__", bg_colors_js) # ใส่สีเข้าไป
 
-    # แสดงผล
-    components.html(html_code, height=900, scrolling=True)
+    # ปรับความสูงเป็น 1600 ตามขอ
+    components.html(html_code, height=1600, scrolling=True)
 
 else:
     st.warning("No Data found in Supabase")
