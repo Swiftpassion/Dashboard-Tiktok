@@ -15,40 +15,44 @@ st.markdown("""
     @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap');
     @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap');
     
-    /* ลบส่วน FORCE DARK MODE ออกแล้ว เพราะใช้ config.toml แทน */
+    /* หมายเหตุ: สี Theme ถูกจัดการโดยไฟล์ .streamlit/config.toml แล้ว */
 
-    /* --- 1. ปรับแต่ง Date Input (ให้ตัวหนังสือใหญ่และไม่มีกรอบ) --- */
+    /* ปรับแต่งพื้นที่ด้านบน (Header) ให้ชิดขอบ */
     .block-container {
         padding-top: 1.5rem !important;
         padding-bottom: 0rem !important;
     }
 
+    /* --- 1. ปรับแต่ง Date Input (ให้เป็นตัวหนังสือใหญ่) --- */
     div[data-testid="stDateInput"] label { display: none; }
     
     div[data-baseweb="input"] {
         background-color: transparent !important;
         border: none !important;
-        border-bottom: 4px solid #ff7043 !important; /* เส้นสีส้ม */
+        border-bottom: 4px solid #ff7043 !important; /* เส้นขีดล่างสีส้ม */
         border-radius: 0px !important;
     }
 
     div[data-baseweb="input"] > div { padding: 0px !important; }
 
+    /* ปรับขนาดตัวเลขวันที่ */
     input[class*="st-"] {
         color: #ffffff !important;
-        font-size: 36px !important; /* วันที่ตัวใหญ่ */
+        font-size: 36px !important; /* ขนาดตัวอักษรใหญ่ */
         font-weight: 700 !important;
         font-family: 'Kanit', sans-serif !important;
         height: auto !important;
+        padding-bottom: 5px !important;
     }
     
+    /* ไอคอนปฏิทิน */
     div[data-baseweb="input"] svg {
         fill: #ff7043 !important;
         width: 28px !important;
         height: 28px !important;
     }
 
-    /* --- 2. ปรับแต่ง Radio Button (Shop Selector) --- */
+    /* --- 2. ปรับแต่ง Radio Button (ตัวเลือกร้านค้า) --- */
     div[role="radiogroup"] {
         display: flex;
         flex-direction: row;
@@ -59,7 +63,7 @@ st.markdown("""
     }
 
     div[data-testid="stRadio"] label {
-        font-size: 26px !important; /* ตัวเลือกร้านตัวใหญ่ */
+        font-size: 26px !important; /* ขนาดตัวหนังสือร้านค้า */
         color: #a0a0a0 !important;
         cursor: pointer;
     }
@@ -70,18 +74,20 @@ st.markdown("""
         font-weight: 600 !important;
     }
 
+    /* ขยายวงกลมตัวเลือก */
     div[data-testid="stRadio"] label div[role="radio"] {
         transform: scale(1.3);
         margin-right: 10px;
         border-color: #a0a0a0 !important;
     }
 
+    /* สีวงกลมเมื่อถูกเลือก */
     div[role="radiogroup"] div[data-checked="true"] div:first-child {
         background-color: #ff7043 !important;
         border-color: #ff7043 !important;
     }
     
-    /* --- Custom Labels --- */
+    /* หัวข้อ "ช่วงวันที่ขายสินค้า" */
     .date-header-label {
         font-family: 'Sarabun', sans-serif;
         font-size: 24px;
@@ -194,20 +200,20 @@ if not df_raw.empty:
     # ==========================================
     
     if not filtered_df.empty:
-        # --- 1. Top Best Seller (20 items) ---
+        # 1. Top Best Seller (20 items)
         top_df = filtered_df.groupby('Clean_SKU')['Quantity'].sum().reset_index().sort_values('Quantity', ascending=False).head(20)
         top_rows_html = ""
         for idx, row in top_df.iterrows():
             icon = ' <span class="trophy-icon">🏆</span>' if idx == top_df.index[0] else ''
             top_rows_html += f"<tr><td>{icon}{row['Clean_SKU']}</td><td>{row['Quantity']:,}</td></tr>"
 
-        # --- 2. Lower Seller (Bottom 10 items) ---
+        # 2. Lower Seller (Bottom 10 items)
         lower_df = filtered_df.groupby('Clean_SKU')['Quantity'].sum().reset_index().sort_values('Quantity', ascending=True).head(10)
         lower_rows_html = ""
         for idx, row in lower_df.iterrows():
             lower_rows_html += f"<tr><td>{row['Clean_SKU']}</td><td>{row['Quantity']:,}</td></tr>"
 
-        # --- 3. Chart Data (Top 20) ---
+        # 3. Chart Data (Top 20)
         chart_df = top_df.head(20)
         labels_js = json.dumps(chart_df['Clean_SKU'].tolist())
         data_values_js = json.dumps(chart_df['Quantity'].tolist())
@@ -255,7 +261,7 @@ if not df_raw.empty:
             grid-template-columns: 65% 35%; 
             gap: 20px;
             margin-top: 10px;
-            height: 98vh; /* ความสูงเต็มจอ */
+            height: 98vh;
             width: 100%;
         }
 
@@ -300,7 +306,7 @@ if not df_raw.empty:
             flex-direction: column;
             gap: 15px;
             height: 100%;
-            min-height: 500px;
+            min-height: 600px; /* เพิ่มความสูงขั้นต่ำป้องกันการยุบ */
         }
 
         .ranking-box {
@@ -314,13 +320,13 @@ if not df_raw.empty:
         /* Top Seller (2/3 พื้นที่) */
         .ranking-box.top-seller { 
             flex: 2; 
-            min-height: 200px; 
+            min-height: 300px; /* จองพื้นที่ไว้ */
         }
         
         /* Lower Seller (1/3 พื้นที่) */
         .ranking-box.lower-seller { 
             flex: 1; 
-            min-height: 150px; 
+            min-height: 200px; /* จองพื้นที่ไว้ให้แน่ใจว่าไม่หาย */
         }
 
         .ranking-header {
@@ -471,6 +477,7 @@ if not df_raw.empty:
 </html>
 """
 
+    # แทนที่ข้อมูลจริงลงไปใน HTML
     html_code = html_code.replace("__SELECTED_SHOP__", selected_shop_ui)
     html_code = html_code.replace("__TOP_ROWS__", top_rows_html)
     html_code = html_code.replace("__LOWER_ROWS__", lower_rows_html)
@@ -478,8 +485,8 @@ if not df_raw.empty:
     html_code = html_code.replace("__CHART_DATA__", data_values_js)
     html_code = html_code.replace("__CHART_COLORS__", bg_colors_js)
 
-    # ปรับความสูง component ให้เหมาะสม
-    components.html(html_code, height=1200, scrolling=True)
+    # เพิ่มความสูงเป็น 1400 เพื่อให้แน่ใจว่าตาราง Lower Seller ไม่ตกขอบ
+    components.html(html_code, height=1400, scrolling=True)
 
 else:
     st.warning("No Data found in Supabase")
