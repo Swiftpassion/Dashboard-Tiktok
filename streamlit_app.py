@@ -15,44 +15,40 @@ st.markdown("""
     @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap');
     @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap');
     
-    /* หมายเหตุ: สี Theme ถูกจัดการโดยไฟล์ .streamlit/config.toml แล้ว */
+    /* Global Font */
+    html, body, [class*="css"] {
+        font-family: 'Kanit', sans-serif;
+    }
 
-    /* ปรับแต่งพื้นที่ด้านบน (Header) ให้ชิดขอบ */
+    /* Block Container */
     .block-container {
         padding-top: 1.5rem !important;
         padding-bottom: 0rem !important;
     }
 
-    /* --- 1. ปรับแต่ง Date Input (แก้ไข: ลดขนาดลง) --- */
+    /* --- Date Input --- */
     div[data-testid="stDateInput"] label { display: none; }
-    
     div[data-baseweb="input"] {
         background-color: transparent !important;
         border: none !important;
-        border-bottom: 3px solid #ff7043 !important; /* ลดความหนาเส้นลงนิดหน่อย */
+        border-bottom: 3px solid #ff7043 !important;
         border-radius: 0px !important;
     }
-
-    div[data-baseweb="input"] > div { padding: 0px !important; }
-
-    /* ปรับขนาดตัวเลขวันที่ (จาก 36px -> 30px) */
     input[class*="st-"] {
         color: #ffffff !important;
-        font-size: 30px !important; /* แก้ไข: ลดขนาดตัวอักษร */
+        font-size: 30px !important;
         font-weight: 700 !important;
         font-family: 'Kanit', sans-serif !important;
         height: auto !important;
         padding-bottom: 5px !important;
     }
-    
-    /* ไอคอนปฏิทิน (จาก 28px -> 24px) */
     div[data-baseweb="input"] svg {
         fill: #ff7043 !important;
         width: 24px !important;
         height: 24px !important;
     }
 
-    /* --- 2. ปรับแต่ง Radio Button (ตัวเลือกร้านค้า) --- */
+    /* --- Radio Button --- */
     div[role="radiogroup"] {
         display: flex;
         flex-direction: row;
@@ -61,39 +57,60 @@ st.markdown("""
         padding-top: 10px;
         flex-wrap: wrap;
     }
-
     div[data-testid="stRadio"] label {
-        font-size: 26px !important; /* ขนาดตัวหนังสือร้านค้า */
+        font-size: 26px !important;
         color: #a0a0a0 !important;
         cursor: pointer;
     }
-
     div[data-testid="stRadio"] label:hover, 
     div[data-testid="stRadio"] label[data-checked="true"] {
         color: #ffffff !important;
         font-weight: 600 !important;
     }
-
-    /* ขยายวงกลมตัวเลือก */
     div[data-testid="stRadio"] label div[role="radio"] {
         transform: scale(1.3);
         margin-right: 10px;
         border-color: #a0a0a0 !important;
     }
-
-    /* สีวงกลมเมื่อถูกเลือก */
     div[role="radiogroup"] div[data-checked="true"] div:first-child {
         background-color: #ff7043 !important;
         border-color: #ff7043 !important;
     }
+
+    /* --- Multiselect (Search Box) Styles --- */
+    .stMultiSelect label {
+        color: #ff7043 !important;
+        font-size: 20px !important;
+        font-weight: 600;
+        margin-bottom: 10px;
+    }
+    div[data-baseweb="select"] > div {
+        background-color: #2b2b2b !important;
+        border-color: #555 !important;
+        color: white !important;
+    }
+    div[data-baseweb="tag"] {
+        background-color: #ff7043 !important;
+        border-radius: 5px;
+    }
+    span[data-baseweb="tag"] span {
+        color: #000000 !important;
+        font-weight: 600;
+    }
     
-    /* หัวข้อ "ช่วงวันที่ขายสินค้า" */
+    /* Header Label */
     .date-header-label {
         font-family: 'Sarabun', sans-serif;
-        font-size: 22px; /* ลดขนาดหัวข้อลงเล็กน้อยให้สมดุล */
+        font-size: 22px;
         color: #a0a0a0;
         margin-bottom: -10px;
         font-weight: 400;
+    }
+    
+    /* Sidebar Styles */
+    section[data-testid="stSidebar"] {
+        background-color: #111;
+        border-right: 1px solid #333;
     }
 
 </style>
@@ -155,7 +172,18 @@ df_raw = load_data()
 if not df_raw.empty:
     df = process_data(df_raw)
 
-    # Header Layout
+    # --- 4.1 Sidebar Menu ---
+    with st.sidebar:
+        st.title("เมนูหลัก")
+        page = st.radio(
+            "เลือกหน้าแสดงผล:",
+            ["ภาพรวม (Overview)", "ค้นหารายสินค้า (Search)"],
+            index=0
+        )
+        st.markdown("---")
+        st.caption("Sales Dashboard v2.0")
+
+    # --- 4.2 Global Filter (Date & Shop) ---
     c_date, c_space, c_shop = st.columns([2, 0.2, 2.5])
     
     with c_date:
@@ -166,7 +194,6 @@ if not df_raw.empty:
         else:
             min_d, max_d = datetime.date.today(), datetime.date.today()
 
-        # แก้ไข: เพิ่ม format="DD/MM/YYYY"
         date_range = st.date_input(
             "Select Date", 
             value=[min_d, max_d],
@@ -190,22 +217,48 @@ if not df_raw.empty:
             label_visibility="collapsed"
         )
 
-    # Filter Logic
+    # กรองข้อมูลเบื้องต้น (วันที่ & ร้านค้า)
     mask = (df['Date'] >= start_date) & (df['Date'] <= end_date)
     if selected_shop_ui != 'All Shops':
         mask = mask & (df['Shop'] == selected_shop_ui)
     
     filtered_df = df.loc[mask]
 
+    # --- 4.3 Page Specific Logic ---
+    
+    # ถ้าเลือกหน้า Search -> ให้แสดง Multiselect และกรองข้อมูลเพิ่ม
+    if page == "ค้นหารายสินค้า (Search)":
+        st.markdown("---")
+        st.markdown("### 🔍 ค้นหาและเลือกสินค้า (Multiselect)")
+        
+        # ดึงรายการสินค้าทั้งหมดที่มีในช่วงเวลานั้น
+        available_skus = sorted(filtered_df['Clean_SKU'].unique().tolist())
+        
+        selected_skus = st.multiselect(
+            "เลือกสินค้าที่ต้องการดูยอดขาย (เลือกได้หลายรายการ):",
+            options=available_skus,
+            placeholder="พิมพ์ชื่อสินค้า..."
+        )
+        
+        # ถ้ามีการเลือกสินค้า ให้กรอง DataFrame อีกรอบ
+        if selected_skus:
+            filtered_df = filtered_df[filtered_df['Clean_SKU'].isin(selected_skus)]
+            st.info(f"กำลังแสดงผลข้อมูลของสินค้า {len(selected_skus)} รายการที่เลือก")
+        else:
+            st.warning("💡 กรุณาเลือกสินค้าอย่างน้อย 1 รายการ หรือดูภาพรวมทั้งหมดด้านล่าง")
+
     # ==========================================
-    # 5. HTML/JS View (Chart & Split Tables)
+    # 5. Calculation & HTML Generation
     # ==========================================
     
     if not filtered_df.empty:
         # 1. Top Best Seller (20 items)
+        # ถ้าเลือก Search แบบเจาะจง อาจจะมีไม่ถึง 20 ก็จะแสดงเท่าที่มี
         top_df = filtered_df.groupby('Clean_SKU')['Quantity'].sum().reset_index().sort_values('Quantity', ascending=False).head(20)
+        
         top_rows_html = ""
         for idx, row in top_df.iterrows():
+            # ใส่ถ้วยรางวัลแค่อันดับ 1
             icon = ' <span class="trophy-icon">🏆</span>' if idx == top_df.index[0] else ''
             top_rows_html += f"<tr><td>{icon}{row['Clean_SKU']}</td><td>{row['Quantity']:,}</td></tr>"
 
@@ -237,6 +290,7 @@ if not df_raw.empty:
         lower_rows_html = "<tr><td>ไม่พบข้อมูล</td><td>-</td></tr>"
         labels_js, data_values_js, bg_colors_js = "[]", "[]", "[]"
 
+    # HTML Code (Full Template)
     html_code = """
 <!DOCTYPE html>
 <html lang="th">
@@ -308,7 +362,7 @@ if not df_raw.empty:
             flex-direction: column;
             gap: 15px;
             height: 100%;
-            min-height: 600px; /* เพิ่มความสูงขั้นต่ำป้องกันการยุบ */
+            min-height: 600px;
         }
 
         .ranking-box {
@@ -322,13 +376,13 @@ if not df_raw.empty:
         /* Top Seller (2/3 พื้นที่) */
         .ranking-box.top-seller { 
             flex: 2; 
-            min-height: 300px; /* จองพื้นที่ไว้ */
+            min-height: 300px;
         }
         
         /* Lower Seller (1/3 พื้นที่) */
         .ranking-box.lower-seller { 
             flex: 1; 
-            min-height: 200px; /* จองพื้นที่ไว้ให้แน่ใจว่าไม่หาย */
+            min-height: 200px;
         }
 
         .ranking-header {
@@ -388,7 +442,7 @@ if not df_raw.empty:
 
     <div class="dashboard-container">
         <div class="chart-area">
-            <div class="chart-title">ยอดขายสินค้า (__SELECTED_SHOP__) - Top 20</div>
+            <div class="chart-title">ยอดขายสินค้า (__SELECTED_SHOP__)</div>
             <div class="chart-wrapper">
                 <canvas id="salesChart"></canvas>
             </div>
@@ -487,7 +541,7 @@ if not df_raw.empty:
     html_code = html_code.replace("__CHART_DATA__", data_values_js)
     html_code = html_code.replace("__CHART_COLORS__", bg_colors_js)
 
-    # เพิ่มความสูงเป็น 1400 เพื่อให้แน่ใจว่าตาราง Lower Seller ไม่ตกขอบ
+    # แสดงผล HTML
     components.html(html_code, height=1400, scrolling=True)
 
 else:
