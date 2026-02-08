@@ -4,6 +4,7 @@ import json
 from supabase import create_client, Client
 import streamlit.components.v1 as components
 import datetime
+import re # Import Regex สำหรับการจับคำ BCD/CP
 
 # ==========================================
 # 1. Config & Styles
@@ -156,7 +157,6 @@ def process_data(df):
     def clean_sku(sku):
         if not sku: return "Unknown"
         s = str(sku).lower().replace("สีเงิน", "silver").replace("สีเทา", "gray")
-        import re
         s = re.sub(r'\b(gb|ram|rom)\b', '', s)
         return re.sub(r'\s+', ' ', s).strip().title()
 
@@ -177,11 +177,15 @@ if not df_raw.empty:
         st.title("เมนูหลัก")
         page = st.radio(
             "เลือกหน้าแสดงผล:",
-            ["ภาพรวม (Overview)", "ค้นหารายสินค้า (Search)"],
+            [
+                "ภาพรวม (Overview)", 
+                "ค้นหารายสินค้า (Search)",
+                "รายงานกลุ่มสินค้า (Special Tags)" # --- เพิ่มเมนูใหม่ ---
+            ],
             index=0
         )
         st.markdown("---")
-        st.caption("Sales Dashboard v2.0")
+        st.caption("Sales Dashboard v2.1")
 
     # --- 4.2 Global Filter (Date & Shop) ---
     c_date, c_space, c_shop = st.columns([2, 0.2, 2.5])
@@ -206,6 +210,8 @@ if not df_raw.empty:
         else:
             start_date, end_date = min_d, max_d
 
+    # ส่วนเลือก Shop (แสดงเฉพาะหน้า Overview / Search)
+    # ถ้าเป็นหน้า Special Tags เราจะจัดการ Shop เองภายใน Logic
     with c_shop:
         st.write("") 
         st.write("") 
@@ -217,35 +223,91 @@ if not df_raw.empty:
             label_visibility="collapsed"
         )
 
-    # กรองข้อมูลเบื้องต้น (วันที่ & ร้านค้า)
-    mask = (df['Date'] >= start_date) & (df['Date'] <= end_date)
-    if selected_shop_ui != 'All Shops':
-        mask = mask & (df['Shop'] == selected_shop_ui)
-    
-    filtered_df = df.loc[mask]
+    # กรองข้อมูลเบื้องต้น (วันที่)
+    # หมายเหตุ: เราแยก Shop Filter ไปทำในแต่ละ Page Logic เพื่อความยืดหยุ่น
+    mask_date = (df['Date'] >= start_date) & (df['Date'] <= end_date)
+    filtered_df = df.loc[mask_date]
 
     # --- 4.3 Page Specific Logic ---
     
-    # ถ้าเลือกหน้า Search -> ให้แสดง Multiselect และกรองข้อมูลเพิ่ม
-    if page == "ค้นหารายสินค้า (Search)":
+    # === Page 1 & 2: Overview & Search ===
+    if page in ["ภาพรวม (Overview)", "ค้นหารายสินค้า (Search)"]:
+        # กรองร้านค้าตาม Dropdown
+        if selected_shop_ui != 'All Shops':
+            filtered_df = filtered_df[filtered_df['Shop'] == selected_shop_ui]
+
+        # Logic หน้า Search
+        if page == "ค้นหารายสินค้า (Search)":
+            st.markdown("---")
+            st.markdown("### 🔍 ค้นหาและเลือกสินค้า (Multiselect)")
+            available_skus = sorted(filtered_df['Clean_SKU'].unique().tolist())
+            selected_skus = st.multiselect(
+                "เลือกสินค้าที่ต้องการดูยอดขาย (เลือกได้หลายรายการ):",
+                options=available_skus,
+                placeholder="พิมพ์ชื่อสินค้า..."
+            )
+            if selected_skus:
+                filtered_df = filtered_df[filtered_df['Clean_SKU'].isin(selected_skus)]
+                st.info(f"กำลังแสดงผลข้อมูลของสินค้า {len(selected_skus)} รายการที่เลือก")
+            else:
+                st.warning("💡 กรุณาเลือกสินค้าอย่างน้อย 1 รายการ หรือดูภาพรวมทั้งหมดด้านล่าง")
+
+    # === Page 3: Special Tags (BCD / CP) ===
+    elif page == "รายงานกลุ่มสินค้า (Special Tags)":
         st.markdown("---")
-        st.markdown("### 🔍 ค้นหาและเลือกสินค้า (Multiselect)")
         
-        # ดึงรายการสินค้าทั้งหมดที่มีในช่วงเวลานั้น
-        available_skus = sorted(filtered_df['Clean_SKU'].unique().tolist())
+        # 1. บังคับกรองเฉพาะ Shop: SIM1 และ SIM2 เท่านั้น
+        # เราดึงข้อมูลจาก mask_date (ที่กรองวันที่แล้ว) มากรอง Shop ต่อเลย
+        filtered_df = filtered_df[filtered_df['Shop'].isin(['SIM1', 'SIM2'])]
+
+        st.markdown(f"### 🏷️ รายงานพิเศษ (เฉพาะร้าน SIM1 & SIM2)")
+        if selected_shop_ui not in ['All Shops', 'SIM1', 'SIM2']:
+             st.caption(f"⚠️ หมายเหตุ: ข้อมูลหน้านี้แสดงเฉพาะ SIM1/SIM2 (การเลือก '{selected_shop_ui}' ด้านบนไม่มีผล)")
+
+        # 2. สร้างฟังก์ชันแยก Tag
+        def extract_tag(sku_name):
+            s = str(sku_name).upper()
+            # ต้องเช็คตัวยาวก่อน (BCDL, CPL) ไม่งั้น BCD จะไป match BCDL ก่อน
+            if 'BCDL' in s: return 'BCDL'
+            if 'BCD' in s: return 'BCD'
+            if 'CPL' in s: return 'CPL'
+            if 'CP' in s: return 'CP'
+            return None # หรือ 'Other'
+
+        # สร้าง Column ใหม่ชั่วคราวสำหรับหน้านี้
+        filtered_df['Tag_Group'] = filtered_df['Clean_SKU'].apply(extract_tag)
         
-        selected_skus = st.multiselect(
-            "เลือกสินค้าที่ต้องการดูยอดขาย (เลือกได้หลายรายการ):",
-            options=available_skus,
-            placeholder="พิมพ์ชื่อสินค้า..."
-        )
-        
-        # ถ้ามีการเลือกสินค้า ให้กรอง DataFrame อีกรอบ
-        if selected_skus:
-            filtered_df = filtered_df[filtered_df['Clean_SKU'].isin(selected_skus)]
-            st.info(f"กำลังแสดงผลข้อมูลของสินค้า {len(selected_skus)} รายการที่เลือก")
+        # กรองเอาเฉพาะที่มี Tag (ไม่เอา None)
+        filtered_df = filtered_df.dropna(subset=['Tag_Group'])
+
+        # 3. Multiselect เลือก Tag
+        col_tag, _ = st.columns([1, 1])
+        with col_tag:
+            tag_options = ['BCD', 'BCDL', 'CP', 'CPL']
+            selected_tags = st.multiselect(
+                "เลือกกลุ่มสินค้า (Tags):",
+                options=tag_options,
+                default=tag_options # เลือกทั้งหมดเป็นค่าเริ่มต้น
+            )
+
+        # กรองข้อมูลตาม Tag ที่เลือก
+        if selected_tags:
+            filtered_df = filtered_df[filtered_df['Tag_Group'].isin(selected_tags)]
+            
+            # สรุปยอดขายตามกลุ่ม
+            summary = filtered_df.groupby('Tag_Group')['Quantity'].sum().reset_index()
+            st.write(" **ยอดขายรวมแยกตามกลุ่ม:**")
+            
+            # แสดง Metrics แบบง่ายๆ
+            cols = st.columns(len(selected_tags))
+            for idx, tag in enumerate(selected_tags):
+                val = summary.loc[summary['Tag_Group'] == tag, 'Quantity'].sum()
+                if idx < len(cols):
+                    cols[idx].metric(label=tag, value=f"{val:,}")
+
         else:
-            st.warning("💡 กรุณาเลือกสินค้าอย่างน้อย 1 รายการ หรือดูภาพรวมทั้งหมดด้านล่าง")
+            st.warning("กรุณาเลือก Tag อย่างน้อย 1 รายการ")
+            filtered_df = pd.DataFrame() # ให้กราฟว่างถ้าไม่เลือก
 
     # ==========================================
     # 5. Calculation & HTML Generation
@@ -253,12 +315,10 @@ if not df_raw.empty:
     
     if not filtered_df.empty:
         # 1. Top Best Seller (20 items)
-        # ถ้าเลือก Search แบบเจาะจง อาจจะมีไม่ถึง 20 ก็จะแสดงเท่าที่มี
         top_df = filtered_df.groupby('Clean_SKU')['Quantity'].sum().reset_index().sort_values('Quantity', ascending=False).head(20)
         
         top_rows_html = ""
         for idx, row in top_df.iterrows():
-            # ใส่ถ้วยรางวัลแค่อันดับ 1
             icon = ' <span class="trophy-icon">🏆</span>' if idx == top_df.index[0] else ''
             top_rows_html += f"<tr><td>{icon}{row['Clean_SKU']}</td><td>{row['Quantity']:,}</td></tr>"
 
@@ -285,10 +345,17 @@ if not df_raw.empty:
             bg_colors.append(color_palette[i % len(color_palette)])
         bg_colors_js = json.dumps(bg_colors)
 
+        # Display Title Logic for Chart
+        if page == "รายงานกลุ่มสินค้า (Special Tags)":
+            display_shop_name = "SIM1 & SIM2 (Tag Filtered)"
+        else:
+            display_shop_name = selected_shop_ui
+
     else:
         top_rows_html = "<tr><td>ไม่พบข้อมูล</td><td>-</td></tr>"
         lower_rows_html = "<tr><td>ไม่พบข้อมูล</td><td>-</td></tr>"
         labels_js, data_values_js, bg_colors_js = "[]", "[]", "[]"
+        display_shop_name = "-"
 
     # HTML Code (Full Template)
     html_code = """
@@ -534,7 +601,7 @@ if not df_raw.empty:
 """
 
     # แทนที่ข้อมูลจริงลงไปใน HTML
-    html_code = html_code.replace("__SELECTED_SHOP__", selected_shop_ui)
+    html_code = html_code.replace("__SELECTED_SHOP__", display_shop_name)
     html_code = html_code.replace("__TOP_ROWS__", top_rows_html)
     html_code = html_code.replace("__LOWER_ROWS__", lower_rows_html)
     html_code = html_code.replace("__CHART_LABELS__", labels_js)
