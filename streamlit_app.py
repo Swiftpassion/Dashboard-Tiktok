@@ -134,13 +134,14 @@ def init_connection():
 def load_data():
     supabase = init_connection()
     try:
+        # เพิ่ม product_tag ที่ท้ายสุด
         response = supabase.table('orders').select(
-            '"Shipped Time", "Warehouse Name", "Seller SKU", "Product Name", "Quantity"'
+            '"Shipped Time", "Warehouse Name", "Seller SKU", "Product Name", "Quantity", "product_tag"'
         ).execute()
         return pd.DataFrame(response.data)
     except:
         return pd.DataFrame()
-
+    
 # ==========================================
 # 3. Process Data
 # ==========================================
@@ -290,15 +291,16 @@ if not df_raw.empty:
             st.error("กรุณาเลือก Tag อย่างน้อย 1 รายการ")
             st.stop()
 
-        # 3. Logic แยก Tag (สร้าง Column ใหม่เฉพาะหน้านี้ เพื่อความแม่นยำ)
-        def extract_tag_logic(sku):
-            s = str(sku).upper()
-            # เช็คคำยาวก่อนเสมอ (BCDL มาก่อน BCD)
-            if 'BCDL' in s: return 'BCDL'
-            if 'CPL' in s: return 'CPL'
-            if 'BCD' in s: return 'BCD'
-            if 'CP' in s: return 'CP'
-            return None
+        # -------------------------------------------------------
+        # 3. Logic แยก Tag (แบบใหม่: ดึงจาก Database)
+        # -------------------------------------------------------
+        df['Tag_Group'] = df['product_tag'].fillna('BCD')
+
+        # 4. Filter Data (Shop + Date + Tags + Search)
+        # กรองเฉพาะ SIM1 และ SIM2 เท่านั้น
+        mask = (df['Date'] >= start_date) & (df['Date'] <= end_date)
+        mask = mask & (df['Shop'].isin(['SIM1', 'SIM2']))
+        mask = mask & (df['Tag_Group'].isin(selected_tags))
 
         # ใช้ Seller SKU (ชื่อดิบ) ในการหา Tag เพื่อความชัวร์
         df['Tag_Group'] = df['Seller SKU'].apply(extract_tag_logic)
