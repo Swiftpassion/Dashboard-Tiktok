@@ -406,24 +406,26 @@ elif page == "รายงานกลุ่มสินค้า (Special Tags)
     color_map = { "BCD": "#b39ddb", "BCDL": "#ef9a9a", "CP": "#3949ab", "CPL": "#c2185b" }
 
     def plot_shop_chart(shop_name, dataframe):
+        # กรองเฉพาะร้านที่ต้องการ
         shop_df = dataframe[dataframe['Shop'] == shop_name]
         
         if shop_df.empty:
-            # แสดงหัวข้อแม้ไม่มีข้อมูล (เพื่อให้ Layout สวยงาม)
             st.markdown(f'<div class="shop-header-sarabun">ร้าน {shop_name}</div>', unsafe_allow_html=True)
             st.info(f"ไม่พบข้อมูล")
             return
 
-        # รวมยอดขาย
+        # 1. เตรียมข้อมูลสำหรับกราฟ (แยกตาม Tag เพื่อให้เห็นสี)
         chart_data = shop_df.groupby(['Clean_SKU', 'Tag_Group'])['Quantity'].sum().reset_index()
         
-        # --- Logic การเรียงลำดับ (มากไปน้อย) ---
-        # หาผลรวมยอดขายต่อ SKU เพื่อใช้เรียงลำดับ
-        # sort_values(ascending=True) จะทำให้ค่าน้อยอยู่บนสุดของ List
-        # แต่ใน Plotly Bar (Horizontal) ค่าที่อยู่ท้าย List จะถูกวาดไว้ "ด้านบนสุด" ของกราฟ (Visual: มาก -> น้อย จากบนลงล่าง)
-        total_sales = chart_data.groupby('Clean_SKU')['Quantity'].sum().reset_index()
-        sorted_skus = total_sales.sort_values('Quantity', ascending=True)['Clean_SKU'].tolist()
+        # 2. คำนวณยอดรวมของแต่ละสินค้าเพื่อใช้จัดลำดับ (สำคัญ!)
+        # เราต้องรวมยอดขายทั้งหมดของสินค้านั้นๆ (ทุก Tag รวมกัน) เพื่อดูว่าใครขายดีสุด
+        total_sales_per_sku = shop_df.groupby('Clean_SKU')['Quantity'].sum().reset_index()
+        
+        # 3. สร้างลำดับการเรียง (Logic: น้อย -> มาก)
+        # เหตุผล: ใน Plotly Bar แนวนอน ค่าสุดท้ายใน list (มากสุด) จะถูกวาดไว้ "บนสุด" ของกราฟ
+        sorted_skus = total_sales_per_sku.sort_values('Quantity', ascending=True)['Clean_SKU'].tolist()
 
+        # 4. สร้างกราฟ
         fig = px.bar(
             chart_data, 
             y="Clean_SKU", 
@@ -431,7 +433,7 @@ elif page == "รายงานกลุ่มสินค้า (Special Tags)
             color="Tag_Group", 
             orientation='h', 
             color_discrete_map=color_map, 
-            category_orders={"Clean_SKU": sorted_skus}, # บังคับลำดับตรงนี้
+            category_orders={"Clean_SKU": sorted_skus}, # บังคับลำดับตามที่เรียงไว้
             text="Quantity"
         )
         
@@ -442,14 +444,14 @@ elif page == "รายงานกลุ่มสินค้า (Special Tags)
             showlegend=True, 
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, title=None),
             margin=dict(l=0, r=0, t=10, b=0),
-            # กำหนดความสูงแบบ Dynamic ตามจำนวนสินค้า
+            # ปรับความสูงอัตโนมัติตามจำนวนสินค้า
             height=max(400, 100 + (len(sorted_skus) * 40)),
             xaxis=dict(showgrid=True, gridcolor='#333'), 
             yaxis=dict(title="")
         )
         fig.update_traces(textposition='inside', insidetextanchor='middle')
 
-        # หัวข้อร้านค้า ใช้ Class ใหม่ "shop-header-sarabun"
+        # แสดงผล
         st.markdown(f'<div class="shop-header-sarabun">ร้าน {shop_name}</div>', unsafe_allow_html=True)
         st.plotly_chart(fig, use_container_width=True)
 
