@@ -414,17 +414,20 @@ elif page == "รายงานกลุ่มสินค้า (Special Tags)
             st.info(f"ไม่พบข้อมูล")
             return
 
-        # 1. เตรียมข้อมูลสำหรับกราฟ
-        chart_data = shop_df.groupby(['Clean_SKU', 'Tag_Group'])['Quantity'].sum().reset_index()
-        
-        # 2. คำนวณยอดรวมของแต่ละสินค้าเพื่อใช้จัดลำดับ
+        # 1. คำนวณยอดรวมเพื่อหา Top 40 สินค้าขายดีที่สุด
         total_sales_per_sku = shop_df.groupby('Clean_SKU')['Quantity'].sum().reset_index()
         
-        # 3. สร้างลำดับการเรียง (แก้ไขเป็น False: มาก -> น้อย)
-        # ผลลัพธ์: สินค้าขายดีสุดจะอยู่ที่ Index 0 (ตัวแรกของ List)
-        sorted_skus = total_sales_per_sku.sort_values('Quantity', ascending=False)['Clean_SKU'].tolist()
+        # เรียงจาก มาก -> น้อย และตัดมาแค่ 40 ตัวแรก
+        top_40_skus_df = total_sales_per_sku.sort_values('Quantity', ascending=False).head(40)
+        
+        # เก็บรายชื่อสินค้า 40 ตัวนี้ไว้เป็น List (ตัวที่ขายดีสุดอยู่ตัวแรก)
+        sorted_skus = top_40_skus_df['Clean_SKU'].tolist()
 
-        # 4. สร้างกราฟ
+        # 2. เตรียมข้อมูลสำหรับกราฟ (กรองเอาเฉพาะสินค้าที่มีใน Top 40)
+        # ต้องกรอง shop_df ให้เหลือแค่สินค้าใน sorted_skus ก่อนค่อย groupby
+        chart_data = shop_df[shop_df['Clean_SKU'].isin(sorted_skus)].groupby(['Clean_SKU', 'Tag_Group'])['Quantity'].sum().reset_index()
+
+        # 3. สร้างกราฟ
         fig = px.bar(
             chart_data, 
             y="Clean_SKU", 
@@ -432,7 +435,7 @@ elif page == "รายงานกลุ่มสินค้า (Special Tags)
             color="Tag_Group", 
             orientation='h', 
             color_discrete_map=color_map, 
-            category_orders={"Clean_SKU": sorted_skus}, # บังคับลำดับตาม List ที่เรียงแล้ว
+            category_orders={"Clean_SKU": sorted_skus}, # บังคับลำดับตาม List (มาก->น้อย)
             text="Quantity"
         )
         
@@ -443,15 +446,16 @@ elif page == "รายงานกลุ่มสินค้า (Special Tags)
             showlegend=True, 
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, title=None),
             margin=dict(l=0, r=0, t=10, b=0),
+            # ปรับความสูงตามจำนวนสินค้า (สูงสุด 40 ตัว)
             height=max(400, 100 + (len(sorted_skus) * 40)),
             xaxis=dict(showgrid=True, gridcolor='#333'), 
-            # สำคัญ: autorange="reversed" จะทำให้ List ตัวแรก (ขายดีสุด) อยู่ด้านบนสุดของกราฟ
+            # สำคัญ: autorange="reversed" เพื่อให้ตัวแรกของ List (ที่ขายดีที่สุด) อยู่ด้านบนสุด
             yaxis=dict(title="", autorange="reversed") 
         )
         fig.update_traces(textposition='inside', insidetextanchor='middle')
 
         # แสดงผล
-        st.markdown(f'<div class="shop-header-sarabun">ร้าน {shop_name}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="shop-header-sarabun">ร้าน {shop_name} (Top 40)</div>', unsafe_allow_html=True)
         st.plotly_chart(fig, use_container_width=True)
 
     with col1: plot_shop_chart("SIM1", df_final)
