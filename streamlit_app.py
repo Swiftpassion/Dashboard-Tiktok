@@ -414,15 +414,15 @@ elif page == "รายงานกลุ่มสินค้า (Special Tags)
             st.info(f"ไม่พบข้อมูล")
             return
 
-        # 1. เตรียมข้อมูลสำหรับกราฟ (แยกตาม Tag เพื่อให้เห็นสี)
+        # 1. เตรียมข้อมูลสำหรับกราฟ
         chart_data = shop_df.groupby(['Clean_SKU', 'Tag_Group'])['Quantity'].sum().reset_index()
         
-        # 2. คำนวณยอดรวมของแต่ละสินค้าเพื่อใช้จัดลำดับ
+        # 2. คำนวณยอดรวมของแต่ละสินค้า
         total_sales_per_sku = shop_df.groupby('Clean_SKU')['Quantity'].sum().reset_index()
         
-        # 3. สร้างลำดับการเรียง (แก้ไขเป็น False: มาก -> น้อย)
-        # เพื่อให้ค่ามากที่สุด (Top 1) อยู่ที่ตำแหน่งแรก และ Plotly จะวาดไว้ด้านบนสุด
-        sorted_skus = total_sales_per_sku.sort_values('Quantity', ascending=False)['Clean_SKU'].tolist()
+        # 3. สร้างลำดับการเรียง (แก้เป็น True: น้อย -> มาก)
+        # เหตุผล: ใน Plotly แกน Y ปกติ ตัวสุดท้ายของ List (ค่ามากสุด) จะถูกวาดไว้ "บนสุด"
+        sorted_skus = total_sales_per_sku.sort_values('Quantity', ascending=True)['Clean_SKU'].tolist()
 
         # 4. สร้างกราฟ
         fig = px.bar(
@@ -445,7 +445,8 @@ elif page == "รายงานกลุ่มสินค้า (Special Tags)
             margin=dict(l=0, r=0, t=10, b=0),
             height=max(400, 100 + (len(sorted_skus) * 40)),
             xaxis=dict(showgrid=True, gridcolor='#333'), 
-            yaxis=dict(title="", autorange="reversed") # เพิ่ม autorange="reversed" เพื่อความชัวร์ว่าบนคืออันดับ 1
+            # ลบ autorange="reversed" ออก ให้ใช้ค่า Default (ล่างขึ้นบน)
+            yaxis=dict(title="") 
         )
         fig.update_traces(textposition='inside', insidetextanchor='middle')
 
