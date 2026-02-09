@@ -15,10 +15,32 @@ st.set_page_config(page_title="Sales Dashboard", layout="wide")
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap');
+    /* นำเข้าฟอนต์ Sarabun สำหรับหัวข้อร้าน */
+    @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap');
     
     /* Global Font */
     html, body, [class*="css"] {
         font-family: 'Kanit', sans-serif;
+    }
+
+    /* --- ขยายขนาดปุ่ม Pills (Tag) --- */
+    div[data-testid="stPills"] button {
+        font-size: 20px !important;   /* เพิ่มขนาดตัวหนังสือ */
+        padding: 12px 28px !important; /* เพิ่มขนาดปุ่ม */
+        font-weight: 600 !important;
+        border-radius: 30px !important;
+        margin: 5px !important;
+    }
+
+    /* --- Shop Header (Sarabun Font) --- */
+    .shop-header-sarabun {
+        font-family: 'Sarabun', sans-serif !important;
+        font-size: 38px !important; /* ขนาดตัวหนังสือใหญ่สะใจ */
+        font-weight: 700 !important;
+        color: #00bcd4; /* สีฟ้า */
+        margin-bottom: 5px;
+        padding-bottom: 5px;
+        text-align: center; /* จัดกึ่งกลางให้สวยงาม */
     }
 
     /* Block Container */
@@ -35,6 +57,12 @@ st.markdown("""
         border-bottom: 3px solid #ff7043 !important;
         border-radius: 0px !important;
     }
+    
+    /* Date Input Formatting Fix */
+    div[data-testid="stDateInput"] input {
+        text-align: center;
+    }
+            
     input[class*="st-"] {
         color: #ffffff !important;
         font-size: 30px !important;
@@ -297,47 +325,80 @@ if page in ["ภาพรวม (Overview)", "ค้นหารายสิน�
 
 
 # =================================================================================
-# CASE 2: SPECIAL TAGS (ใช้ Plotly + Logic ใหม่จาก Database)
+# CASE 2: SPECIAL TAGS (แก้ไขใหม่: ค้นหาแบบกลุ่ม / ปุ่มใหญ่ / ฟอนต์ Sarabun)
 # =================================================================================
 elif page == "รายงานกลุ่มสินค้า (Special Tags)":
     
     st.markdown("---")
     
-    # 1. Filter UI
+    # 1. Filter UI (Date & Search)
     c_date, c_space, c_search = st.columns([2, 0.5, 3])
     with c_date:
+        # กำหนด Format วันที่บังคับเป็น DD/MM/YYYY
         valid_dates = df['Date'].dropna().sort_values()
         min_d, max_d = (valid_dates.iloc[0], valid_dates.iloc[-1]) if not valid_dates.empty else (datetime.date.today(), datetime.date.today())
-        date_range = st.date_input("Date Range", value=[min_d, max_d], label_visibility="collapsed")
-        start_date, end_date = date_range if len(date_range) == 2 else (min_d, max_d)
+        
+        date_range = st.date_input(
+            "Date Range", 
+            value=[min_d, max_d], 
+            format="DD/MM/YYYY",  # <--- บังคับ Format ตรงนี้
+            label_visibility="collapsed"
+        )
+        if len(date_range) == 2:
+            start_date, end_date = date_range
+        else:
+            start_date, end_date = min_d, max_d
     
-    with c_search:
-        search_query = st.text_input("Search", placeholder="พิมพ์ชื่อรุ่นสินค้า...", label_visibility="collapsed")
+    # กรองวันที่ก่อน เพื่อให้ List สินค้าในช่องค้นหาไม่เยอะเกินไป
+    mask_date = (df['Date'] >= start_date) & (df['Date'] <= end_date)
+    df_date_filtered = df.loc[mask_date]
 
-    st.write("")
+    with c_search:
+        # เปลี่ยนเป็น Multiselect (ค้นหาและเลือกได้หลายอัน)
+        # ดึงรายชื่อสินค้าที่มีขายในช่วงเวลานั้นมาแสดง
+        available_products = sorted(df_date_filtered['Clean_SKU'].unique().tolist())
+        selected_skus = st.multiselect(
+            "ค้นหา (เลือกสินค้าได้หลายรายการ)", 
+            options=available_products,
+            placeholder="พิมพ์ชื่อรุ่นสินค้าเพื่อค้นหา...",
+            label_visibility="collapsed"
+        )
+
+    st.write("") # เว้นบรรทัดนิดนึง
+    
+    # 2. Tag Selection (ปุ่ม Pills ใหญ่ขึ้นด้วย CSS ด้านบน)
     tag_options = ["BCD", "BCDL", "CP", "CPL"]
     try:
-        selected_tags = st.pills("เลือก Tags", options=tag_options, default=tag_options, selection_mode="multi", label_visibility="collapsed")
+        # ใช้ st.pills (Streamlit version ใหม่)
+        selected_tags = st.pills(
+            "เลือก Tags", 
+            options=tag_options, 
+            default=tag_options, 
+            selection_mode="multi", 
+            label_visibility="collapsed"
+        )
     except AttributeError:
+        # Fallback กรณีเวอร์ชันเก่า
         selected_tags = st.multiselect("เลือก Tags", options=tag_options, default=tag_options)
 
     if not selected_tags:
         st.error("กรุณาเลือก Tag อย่างน้อย 1 รายการ")
         st.stop()
 
-    # 2. Prepare Data (Use product_tag from DB)
-    df['Tag_Group'] = df['product_tag'].fillna('BCD')
+    # 3. Prepare Data (ใช้ product_tag จาก DB)
+    df_date_filtered['Tag_Group'] = df_date_filtered['product_tag'].fillna('BCD')
 
-    # 3. Apply Filters
-    mask = (df['Date'] >= start_date) & (df['Date'] <= end_date)
-    mask = mask & (df['Shop'].isin(['SIM1', 'SIM2']))
-    mask = mask & (df['Tag_Group'].isin(selected_tags))
-    if search_query:
-        mask = mask & (df['Clean_SKU'].str.contains(search_query, case=False))
+    # 4. Apply Filters (Shop + Tags + Selected SKUs)
+    mask = df_date_filtered['Shop'].isin(['SIM1', 'SIM2'])
+    mask = mask & (df_date_filtered['Tag_Group'].isin(selected_tags))
     
-    df_filtered = df.loc[mask]
+    # ถ้ามีการเลือกสินค้าในช่องค้นหา ให้กรองด้วย
+    if selected_skus:
+        mask = mask & (df_date_filtered['Clean_SKU'].isin(selected_skus))
+    
+    df_final = df_date_filtered.loc[mask]
 
-    # 4. Render Charts (Split View)
+    # 5. Render Charts (Split View)
     st.markdown("---")
     col1, col2 = st.columns(2, gap="medium")
     
@@ -345,32 +406,52 @@ elif page == "รายงานกลุ่มสินค้า (Special Tags)
 
     def plot_shop_chart(shop_name, dataframe):
         shop_df = dataframe[dataframe['Shop'] == shop_name]
+        
         if shop_df.empty:
-            st.info(f"ไม่พบข้อมูล {shop_name}")
+            # แสดงหัวข้อแม้ไม่มีข้อมูล (เพื่อให้ Layout สวยงาม)
+            st.markdown(f'<div class="shop-header-sarabun">ร้าน {shop_name}</div>', unsafe_allow_html=True)
+            st.info(f"ไม่พบข้อมูล")
             return
 
+        # รวมยอดขาย
         chart_data = shop_df.groupby(['Clean_SKU', 'Tag_Group'])['Quantity'].sum().reset_index()
+        
+        # --- Logic การเรียงลำดับ (มากไปน้อย) ---
+        # หาผลรวมยอดขายต่อ SKU เพื่อใช้เรียงลำดับ
         total_sales = chart_data.groupby('Clean_SKU')['Quantity'].sum().reset_index()
+        # sort_values(ascending=True) จะทำให้ค่าน้อยอยู่บนสุดของ List
+        # แต่ใน Plotly Bar (Horizontal) ค่าที่อยู่ท้าย List จะถูกวาดไว้ "ด้านบนสุด" ของกราฟ
+        # ดังนั้นต้องเรียง น้อย -> มาก เพื่อให้กราฟแสดง มาก -> น้อย (จากบนลงล่าง)
         sorted_skus = total_sales.sort_values('Quantity', ascending=True)['Clean_SKU'].tolist()
 
         fig = px.bar(
-            chart_data, y="Clean_SKU", x="Quantity", color="Tag_Group", 
-            orientation='h', color_discrete_map=color_map, 
-            category_orders={"Clean_SKU": sorted_skus}, text="Quantity"
+            chart_data, 
+            y="Clean_SKU", 
+            x="Quantity", 
+            color="Tag_Group", 
+            orientation='h', 
+            color_discrete_map=color_map, 
+            category_orders={"Clean_SKU": sorted_skus}, # บังคับลำดับตรงนี้
+            text="Quantity"
         )
         
         fig.update_layout(
-            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)', 
+            plot_bgcolor='rgba(0,0,0,0)',
             font=dict(color='white', family='Kanit'),
-            showlegend=True, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, title=None),
-            margin=dict(l=0, r=0, t=30, b=0),
-            height=max(400, 100 + (len(sorted_skus) * 35)),
-            xaxis=dict(showgrid=True, gridcolor='#333'), yaxis=dict(title="")
+            showlegend=True, 
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, title=None),
+            margin=dict(l=0, r=0, t=10, b=0),
+            # กำหนดความสูงแบบ Dynamic ตามจำนวนสินค้า
+            height=max(400, 100 + (len(sorted_skus) * 40)),
+            xaxis=dict(showgrid=True, gridcolor='#333'), 
+            yaxis=dict(title="")
         )
         fig.update_traces(textposition='inside', insidetextanchor='middle')
 
-        st.markdown(f'<div class="shop-header">ร้าน {shop_name}</div>', unsafe_allow_html=True)
+        # หัวข้อร้านค้า ใช้ Class ใหม่ "shop-header-sarabun"
+        st.markdown(f'<div class="shop-header-sarabun">ร้าน {shop_name}</div>', unsafe_allow_html=True)
         st.plotly_chart(fig, use_container_width=True)
 
-    with col1: plot_shop_chart("SIM1", df_filtered)
-    with col2: plot_shop_chart("SIM2", df_filtered)
+    with col1: plot_shop_chart("SIM1", df_final)
+    with col2: plot_shop_chart("SIM2", df_final)
