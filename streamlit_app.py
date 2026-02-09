@@ -254,60 +254,129 @@ if not df_raw.empty:
 
     # === Page 3: Special Tags (BCD / CP) ===
     elif page == "รายงานกลุ่มสินค้า (Special Tags)":
+        
+        # 1. Header & Filter (Date / Search)
         st.markdown("---")
+        c_date, c_space, c_search = st.columns([2, 0.5, 3])
         
-        # 1. บังคับกรองเฉพาะ Shop: SIM1 และ SIM2 เท่านั้น
-        # เราดึงข้อมูลจาก mask_date (ที่กรองวันที่แล้ว) มากรอง Shop ต่อเลย
-        filtered_df = filtered_df[filtered_df['Shop'].isin(['SIM1', 'SIM2'])]
+        with c_date:
+            # ใช้ช่วงวันที่จากข้อมูลที่มี
+            valid_dates = df['Date'].dropna().sort_values()
+            if not valid_dates.empty:
+                min_d, max_d = valid_dates.iloc[0], valid_dates.iloc[-1]
+            else:
+                min_d, max_d = datetime.date.today(), datetime.date.today()
+                
+            date_range = st.date_input("Date Range", value=[min_d, max_d], label_visibility="collapsed")
+            if len(date_range) == 2:
+                start_date, end_date = date_range
+            else:
+                start_date, end_date = min_d, max_d
+        
+        with c_search:
+            search_query = st.text_input("Search", placeholder="พิมพ์ชื่อรุ่นสินค้า...", label_visibility="collapsed")
 
-        st.markdown(f"### 🏷️ รายงานพิเศษ (เฉพาะร้าน SIM1 & SIM2)")
-        if selected_shop_ui not in ['All Shops', 'SIM1', 'SIM2']:
-             st.caption(f"⚠️ หมายเหตุ: ข้อมูลหน้านี้แสดงเฉพาะ SIM1/SIM2 (การเลือก '{selected_shop_ui}' ด้านบนไม่มีผล)")
+        # 2. Tag Selection (เลือก Tag)
+        st.write("")
+        tag_options = ["BCD", "BCDL", "CP", "CPL"]
+        
+        # ใช้ st.pills เพื่อให้เป็นปุ่มกด (ถ้าใช้ Streamlit เวอร์ชันเก่า อาจต้องเปลี่ยนเป็น st.multiselect)
+        try:
+            selected_tags = st.pills("เลือก Tags", options=tag_options, default=tag_options, selection_mode="multi", label_visibility="collapsed")
+        except AttributeError:
+            selected_tags = st.multiselect("เลือก Tags", options=tag_options, default=tag_options)
 
-        # 2. สร้างฟังก์ชันแยก Tag
-        def extract_tag(sku_name):
-            s = str(sku_name).upper()
-            # ต้องเช็คตัวยาวก่อน (BCDL, CPL) ไม่งั้น BCD จะไป match BCDL ก่อน
+        if not selected_tags:
+            st.error("กรุณาเลือก Tag อย่างน้อย 1 รายการ")
+            st.stop()
+
+        # 3. Logic แยก Tag (สร้าง Column ใหม่เฉพาะหน้านี้ เพื่อความแม่นยำ)
+        def extract_tag_logic(sku):
+            s = str(sku).upper()
+            # เช็คคำยาวก่อนเสมอ (BCDL มาก่อน BCD)
             if 'BCDL' in s: return 'BCDL'
-            if 'BCD' in s: return 'BCD'
             if 'CPL' in s: return 'CPL'
+            if 'BCD' in s: return 'BCD'
             if 'CP' in s: return 'CP'
-            return None # หรือ 'Other'
+            return None
 
-        # สร้าง Column ใหม่ชั่วคราวสำหรับหน้านี้
-        filtered_df['Tag_Group'] = filtered_df['Clean_SKU'].apply(extract_tag)
+        # ใช้ Seller SKU (ชื่อดิบ) ในการหา Tag เพื่อความชัวร์
+        df['Tag_Group'] = df['Seller SKU'].apply(extract_tag_logic)
+
+        # 4. Filter Data (Shop + Date + Tags + Search)
+        # กรองเฉพาะ SIM1 และ SIM2 เท่านั้น
+        mask = (df['Date'] >= start_date) & (df['Date'] <= end_date)
+        mask = mask & (df['Shop'].isin(['SIM1', 'SIM2']))
+        mask = mask & (df['Tag_Group'].isin(selected_tags))
         
-        # กรองเอาเฉพาะที่มี Tag (ไม่เอา None)
-        filtered_df = filtered_df.dropna(subset=['Tag_Group'])
+        if search_query:
+            mask = mask & (df['Clean_SKU'].str.contains(search_query, case=False))
+        
+        df_filtered = df.loc[mask]
 
-        # 3. Multiselect เลือก Tag
-        col_tag, _ = st.columns([1, 1])
-        with col_tag:
-            tag_options = ['BCD', 'BCDL', 'CP', 'CPL']
-            selected_tags = st.multiselect(
-                "เลือกกลุ่มสินค้า (Tags):",
-                options=tag_options,
-                default=tag_options # เลือกทั้งหมดเป็นค่าเริ่มต้น
+        # 5. สร้างกราฟแยก 2 ฝั่ง (SIM1 ซ้าย / SIM2 ขวา)
+        st.markdown("---")
+        col1, col2 = st.columns(2, gap="medium")
+
+        # กำหนดสีตามรูป (ม่วง/ชมพู/น้ำเงิน)
+        color_map = {
+            "BCD": "#b39ddb",  # ม่วงอ่อน
+            "BCDL": "#ef9a9a", # ชมพูอ่อน/ส้ม
+            "CP": "#3949ab",   # น้ำเงินเข้ม
+            "CPL": "#c2185b"   # ชมพูเข้ม
+        }
+
+        # ฟังก์ชันวาดกราฟสำหรับแต่ละร้าน
+        def plot_shop_chart(shop_name, dataframe):
+            shop_df = dataframe[dataframe['Shop'] == shop_name]
+            
+            if shop_df.empty:
+                st.info(f"ไม่พบข้อมูล {shop_name}")
+                return
+
+            # รวมยอดขายตาม SKU และ Tag
+            chart_data = shop_df.groupby(['Clean_SKU', 'Tag_Group'])['Quantity'].sum().reset_index()
+            
+            # เรียงลำดับสินค้า (ขายดีอยู่บน)
+            total_sales = chart_data.groupby('Clean_SKU')['Quantity'].sum().reset_index()
+            sorted_skus = total_sales.sort_values('Quantity', ascending=True)['Clean_SKU'].tolist()
+
+            # สร้างกราฟ Plotly แนวนอน
+            fig = px.bar(
+                chart_data, 
+                y="Clean_SKU", 
+                x="Quantity", 
+                color="Tag_Group", 
+                orientation='h',
+                color_discrete_map=color_map, 
+                category_orders={"Clean_SKU": sorted_skus},
+                text="Quantity"
             )
-
-        # กรองข้อมูลตาม Tag ที่เลือก
-        if selected_tags:
-            filtered_df = filtered_df[filtered_df['Tag_Group'].isin(selected_tags)]
             
-            # สรุปยอดขายตามกลุ่ม
-            summary = filtered_df.groupby('Tag_Group')['Quantity'].sum().reset_index()
-            st.write(" **ยอดขายรวมแยกตามกลุ่ม:**")
-            
-            # แสดง Metrics แบบง่ายๆ
-            cols = st.columns(len(selected_tags))
-            for idx, tag in enumerate(selected_tags):
-                val = summary.loc[summary['Tag_Group'] == tag, 'Quantity'].sum()
-                if idx < len(cols):
-                    cols[idx].metric(label=tag, value=f"{val:,}")
+            # ปรับแต่ง Theme กราฟให้เข้ากับ Dark Mode และเหมือนรูป
+            fig.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)', 
+                plot_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='white', family='Kanit'),
+                showlegend=True,
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, title=None),
+                margin=dict(l=0, r=0, t=30, b=0),
+                height=max(400, 100 + (len(sorted_skus) * 35)), # ความสูง Auto ตามจำนวนสินค้า
+                xaxis=dict(showgrid=True, gridcolor='#333'), 
+                yaxis=dict(title="")
+            )
+            fig.update_traces(textposition='inside', insidetextanchor='middle')
 
-        else:
-            st.warning("กรุณาเลือก Tag อย่างน้อย 1 รายการ")
-            filtered_df = pd.DataFrame() # ให้กราฟว่างถ้าไม่เลือก
+            # แสดงหัวข้อร้าน
+            st.markdown(f'<div class="shop-header">ร้าน {shop_name}</div>', unsafe_allow_html=True)
+            st.plotly_chart(fig, use_container_width=True)
+
+        # เรียกใช้งานกราฟ
+        with col1:
+            plot_shop_chart("SIM1", df_filtered)
+        
+        with col2:
+            plot_shop_chart("SIM2", df_filtered)
 
     # ==========================================
     # 5. Calculation & HTML Generation
