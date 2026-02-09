@@ -417,13 +417,12 @@ elif page == "รายงานกลุ่มสินค้า (Special Tags)
         # 1. เตรียมข้อมูลสำหรับกราฟ (แยกตาม Tag เพื่อให้เห็นสี)
         chart_data = shop_df.groupby(['Clean_SKU', 'Tag_Group'])['Quantity'].sum().reset_index()
         
-        # 2. คำนวณยอดรวมของแต่ละสินค้าเพื่อใช้จัดลำดับ (สำคัญ!)
-        # เราต้องรวมยอดขายทั้งหมดของสินค้านั้นๆ (ทุก Tag รวมกัน) เพื่อดูว่าใครขายดีสุด
+        # 2. คำนวณยอดรวมของแต่ละสินค้าเพื่อใช้จัดลำดับ
         total_sales_per_sku = shop_df.groupby('Clean_SKU')['Quantity'].sum().reset_index()
         
-        # 3. สร้างลำดับการเรียง (Logic: น้อย -> มาก)
-        # เหตุผล: ใน Plotly Bar แนวนอน ค่าสุดท้ายใน list (มากสุด) จะถูกวาดไว้ "บนสุด" ของกราฟ
-        sorted_skus = total_sales_per_sku.sort_values('Quantity', ascending=True)['Clean_SKU'].tolist()
+        # 3. สร้างลำดับการเรียง (แก้ไขเป็น False: มาก -> น้อย)
+        # เพื่อให้ค่ามากที่สุด (Top 1) อยู่ที่ตำแหน่งแรก และ Plotly จะวาดไว้ด้านบนสุด
+        sorted_skus = total_sales_per_sku.sort_values('Quantity', ascending=False)['Clean_SKU'].tolist()
 
         # 4. สร้างกราฟ
         fig = px.bar(
@@ -433,7 +432,7 @@ elif page == "รายงานกลุ่มสินค้า (Special Tags)
             color="Tag_Group", 
             orientation='h', 
             color_discrete_map=color_map, 
-            category_orders={"Clean_SKU": sorted_skus}, # บังคับลำดับตามที่เรียงไว้
+            category_orders={"Clean_SKU": sorted_skus}, # บังคับลำดับ
             text="Quantity"
         )
         
@@ -444,10 +443,9 @@ elif page == "รายงานกลุ่มสินค้า (Special Tags)
             showlegend=True, 
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, title=None),
             margin=dict(l=0, r=0, t=10, b=0),
-            # ปรับความสูงอัตโนมัติตามจำนวนสินค้า
             height=max(400, 100 + (len(sorted_skus) * 40)),
             xaxis=dict(showgrid=True, gridcolor='#333'), 
-            yaxis=dict(title="")
+            yaxis=dict(title="", autorange="reversed") # เพิ่ม autorange="reversed" เพื่อความชัวร์ว่าบนคืออันดับ 1
         )
         fig.update_traces(textposition='inside', insidetextanchor='middle')
 
