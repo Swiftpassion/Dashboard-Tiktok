@@ -3,7 +3,7 @@ import pandas as pd
 import json
 import plotly.express as px
 from supabase import create_client
-import streamlit.components.v1 as components  # <--- ต้องมีบรรทัดนี้ ไม่งั้น html error
+import streamlit.components.v1 as components
 import datetime
 import re
 
@@ -145,6 +145,7 @@ def init_connection():
 def load_data():
     supabase = init_connection()
     try:
+        # ดึง product_tag มาด้วยตามที่สร้างไว้ใน DB
         response = supabase.table('orders').select(
             '"Shipped Time", "Warehouse Name", "Seller SKU", "Product Name", "Quantity", "product_tag"'
         ).execute()
@@ -418,10 +419,9 @@ elif page == "รายงานกลุ่มสินค้า (Special Tags)
         
         # --- Logic การเรียงลำดับ (มากไปน้อย) ---
         # หาผลรวมยอดขายต่อ SKU เพื่อใช้เรียงลำดับ
-        total_sales = chart_data.groupby('Clean_SKU')['Quantity'].sum().reset_index()
         # sort_values(ascending=True) จะทำให้ค่าน้อยอยู่บนสุดของ List
-        # แต่ใน Plotly Bar (Horizontal) ค่าที่อยู่ท้าย List จะถูกวาดไว้ "ด้านบนสุด" ของกราฟ
-        # ดังนั้นต้องเรียง น้อย -> มาก เพื่อให้กราฟแสดง มาก -> น้อย (จากบนลงล่าง)
+        # แต่ใน Plotly Bar (Horizontal) ค่าที่อยู่ท้าย List จะถูกวาดไว้ "ด้านบนสุด" ของกราฟ (Visual: มาก -> น้อย จากบนลงล่าง)
+        total_sales = chart_data.groupby('Clean_SKU')['Quantity'].sum().reset_index()
         sorted_skus = total_sales.sort_values('Quantity', ascending=True)['Clean_SKU'].tolist()
 
         fig = px.bar(
