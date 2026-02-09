@@ -1,10 +1,11 @@
 import streamlit as st
 import pandas as pd
 import json
-from supabase import create_client, Client
-import streamlit.components.v1 as components
+import plotly.express as px
+from supabase import create_client
+import streamlit.components.v1 as components  # <--- ต้องมีบรรทัดนี้ ไม่งั้น html error
 import datetime
-import re # Import Regex สำหรับการจับคำ BCD/CP
+import re
 
 # ==========================================
 # 1. Config & Styles
@@ -14,7 +15,6 @@ st.set_page_config(page_title="Sales Dashboard", layout="wide")
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap');
-    @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap');
     
     /* Global Font */
     html, body, [class*="css"] {
@@ -24,7 +24,7 @@ st.markdown("""
     /* Block Container */
     .block-container {
         padding-top: 1.5rem !important;
-        padding-bottom: 0rem !important;
+        padding-bottom: 2rem !important;
     }
 
     /* --- Date Input --- */
@@ -42,11 +42,6 @@ st.markdown("""
         font-family: 'Kanit', sans-serif !important;
         height: auto !important;
         padding-bottom: 5px !important;
-    }
-    div[data-baseweb="input"] svg {
-        fill: #ff7043 !important;
-        width: 24px !important;
-        height: 24px !important;
     }
 
     /* --- Radio Button --- */
@@ -78,40 +73,28 @@ st.markdown("""
         border-color: #ff7043 !important;
     }
 
-    /* --- Multiselect (Search Box) Styles --- */
-    .stMultiSelect label {
-        color: #ff7043 !important;
-        font-size: 20px !important;
-        font-weight: 600;
-        margin-bottom: 10px;
-    }
-    div[data-baseweb="select"] > div {
-        background-color: #2b2b2b !important;
-        border-color: #555 !important;
-        color: white !important;
-    }
-    div[data-baseweb="tag"] {
-        background-color: #ff7043 !important;
-        border-radius: 5px;
-    }
-    span[data-baseweb="tag"] span {
-        color: #000000 !important;
-        font-weight: 600;
-    }
-    
-    /* Header Label */
+    /* --- Header Label --- */
     .date-header-label {
-        font-family: 'Sarabun', sans-serif;
         font-size: 22px;
         color: #a0a0a0;
         margin-bottom: -10px;
         font-weight: 400;
     }
     
-    /* Sidebar Styles */
+    /* Sidebar */
     section[data-testid="stSidebar"] {
         background-color: #111;
         border-right: 1px solid #333;
+    }
+    
+    /* Shop Header (Special Page) */
+    .shop-header {
+        font-size: 24px;
+        font-weight: 700;
+        color: #00bcd4;
+        margin-bottom: 10px;
+        border-bottom: 2px solid #333;
+        padding-bottom: 5px;
     }
 
 </style>
@@ -134,14 +117,13 @@ def init_connection():
 def load_data():
     supabase = init_connection()
     try:
-        # เพิ่ม product_tag ที่ท้ายสุด
         response = supabase.table('orders').select(
             '"Shipped Time", "Warehouse Name", "Seller SKU", "Product Name", "Quantity", "product_tag"'
         ).execute()
         return pd.DataFrame(response.data)
     except:
         return pd.DataFrame()
-    
+
 # ==========================================
 # 3. Process Data
 # ==========================================
@@ -170,224 +152,63 @@ def process_data(df):
 # ==========================================
 df_raw = load_data()
 
-if not df_raw.empty:
-    df = process_data(df_raw)
+if df_raw.empty:
+    st.warning("No Data found in Supabase")
+    st.stop()
 
-    # --- 4.1 Sidebar Menu ---
-    with st.sidebar:
-        st.title("เมนูหลัก")
-        page = st.radio(
-            "เลือกหน้าแสดงผล:",
-            [
-                "ภาพรวม (Overview)", 
-                "ค้นหารายสินค้า (Search)",
-                "รายงานกลุ่มสินค้า (Special Tags)" # --- เพิ่มเมนูใหม่ ---
-            ],
-            index=0
-        )
-        st.markdown("---")
-        st.caption("Sales Dashboard v2.1")
+df = process_data(df_raw)
 
-    # --- 4.2 Global Filter (Date & Shop) ---
-    c_date, c_space, c_shop = st.columns([2, 0.2, 2.5])
+# --- 4.1 Sidebar Menu ---
+with st.sidebar:
+    st.title("เมนูหลัก")
+    page = st.radio(
+        "เลือกหน้าแสดงผล:",
+        ["ภาพรวม (Overview)", "ค้นหารายสินค้า (Search)", "รายงานกลุ่มสินค้า (Special Tags)"],
+        index=0
+    )
+    st.markdown("---")
+    st.caption("Sales Dashboard v2.2")
+
+# =================================================================================
+# CASE 1: OVERVIEW & SEARCH (ใช้ HTML/Chart.js แบบเดิม)
+# =================================================================================
+if page in ["ภาพรวม (Overview)", "ค้นหารายสินค้า (Search)"]:
     
+    # -- Header Filter --
+    c_date, c_space, c_shop = st.columns([2, 0.2, 2.5])
     with c_date:
         st.markdown('<div class="date-header-label">ช่วงวันที่ขายสินค้า</div>', unsafe_allow_html=True)
         valid_dates = df['Date'].dropna().sort_values()
-        if not valid_dates.empty:
-            min_d, max_d = valid_dates.iloc[0], valid_dates.iloc[-1]
-        else:
-            min_d, max_d = datetime.date.today(), datetime.date.today()
+        min_d, max_d = (valid_dates.iloc[0], valid_dates.iloc[-1]) if not valid_dates.empty else (datetime.date.today(), datetime.date.today())
+        date_range = st.date_input("Select Date", value=[min_d, max_d], format="DD/MM/YYYY")
+        start_date, end_date = date_range if len(date_range) == 2 else (min_d, max_d)
 
-        date_range = st.date_input(
-            "Select Date", 
-            value=[min_d, max_d],
-            min_value=min_d,
-            max_value=max_d,
-            format="DD/MM/YYYY" 
-        )
-        if len(date_range) == 2:
-            start_date, end_date = date_range
-        else:
-            start_date, end_date = min_d, max_d
-
-    # ส่วนเลือก Shop (แสดงเฉพาะหน้า Overview / Search)
-    # ถ้าเป็นหน้า Special Tags เราจะจัดการ Shop เองภายใน Logic
     with c_shop:
         st.write("") 
         st.write("") 
         shop_options = ['All Shops'] + sorted(df['Shop'].unique().tolist())
-        selected_shop_ui = st.radio(
-            "Shop", 
-            shop_options,
-            horizontal=True,
-            label_visibility="collapsed"
-        )
+        selected_shop_ui = st.radio("Shop", shop_options, horizontal=True, label_visibility="collapsed")
 
-    # กรองข้อมูลเบื้องต้น (วันที่)
-    # หมายเหตุ: เราแยก Shop Filter ไปทำในแต่ละ Page Logic เพื่อความยืดหยุ่น
+    # -- Filter Data --
     mask_date = (df['Date'] >= start_date) & (df['Date'] <= end_date)
     filtered_df = df.loc[mask_date]
 
-    # --- 4.3 Page Specific Logic ---
-    
-    # === Page 1 & 2: Overview & Search ===
-    if page in ["ภาพรวม (Overview)", "ค้นหารายสินค้า (Search)"]:
-        # กรองร้านค้าตาม Dropdown
-        if selected_shop_ui != 'All Shops':
-            filtered_df = filtered_df[filtered_df['Shop'] == selected_shop_ui]
+    if selected_shop_ui != 'All Shops':
+        filtered_df = filtered_df[filtered_df['Shop'] == selected_shop_ui]
 
-        # Logic หน้า Search
-        if page == "ค้นหารายสินค้า (Search)":
-            st.markdown("---")
-            st.markdown("### 🔍 ค้นหาและเลือกสินค้า (Multiselect)")
-            available_skus = sorted(filtered_df['Clean_SKU'].unique().tolist())
-            selected_skus = st.multiselect(
-                "เลือกสินค้าที่ต้องการดูยอดขาย (เลือกได้หลายรายการ):",
-                options=available_skus,
-                placeholder="พิมพ์ชื่อสินค้า..."
-            )
-            if selected_skus:
-                filtered_df = filtered_df[filtered_df['Clean_SKU'].isin(selected_skus)]
-                st.info(f"กำลังแสดงผลข้อมูลของสินค้า {len(selected_skus)} รายการที่เลือก")
-            else:
-                st.warning("💡 กรุณาเลือกสินค้าอย่างน้อย 1 รายการ หรือดูภาพรวมทั้งหมดด้านล่าง")
-
-    # === Page 3: Special Tags (BCD / CP) ===
-    elif page == "รายงานกลุ่มสินค้า (Special Tags)":
-        
-        # 1. Header & Filter (Date / Search)
+    # -- Search Logic --
+    if page == "ค้นหารายสินค้า (Search)":
         st.markdown("---")
-        c_date, c_space, c_search = st.columns([2, 0.5, 3])
-        
-        with c_date:
-            # ใช้ช่วงวันที่จากข้อมูลที่มี
-            valid_dates = df['Date'].dropna().sort_values()
-            if not valid_dates.empty:
-                min_d, max_d = valid_dates.iloc[0], valid_dates.iloc[-1]
-            else:
-                min_d, max_d = datetime.date.today(), datetime.date.today()
-                
-            date_range = st.date_input("Date Range", value=[min_d, max_d], label_visibility="collapsed")
-            if len(date_range) == 2:
-                start_date, end_date = date_range
-            else:
-                start_date, end_date = min_d, max_d
-        
-        with c_search:
-            search_query = st.text_input("Search", placeholder="พิมพ์ชื่อรุ่นสินค้า...", label_visibility="collapsed")
+        st.markdown("### 🔍 ค้นหาและเลือกสินค้า")
+        available_skus = sorted(filtered_df['Clean_SKU'].unique().tolist())
+        selected_skus = st.multiselect("เลือกสินค้า:", options=available_skus)
+        if selected_skus:
+            filtered_df = filtered_df[filtered_df['Clean_SKU'].isin(selected_skus)]
 
-        # 2. Tag Selection (เลือก Tag)
-        st.write("")
-        tag_options = ["BCD", "BCDL", "CP", "CPL"]
-        
-        # ใช้ st.pills เพื่อให้เป็นปุ่มกด (ถ้าใช้ Streamlit เวอร์ชันเก่า อาจต้องเปลี่ยนเป็น st.multiselect)
-        try:
-            selected_tags = st.pills("เลือก Tags", options=tag_options, default=tag_options, selection_mode="multi", label_visibility="collapsed")
-        except AttributeError:
-            selected_tags = st.multiselect("เลือก Tags", options=tag_options, default=tag_options)
-
-        if not selected_tags:
-            st.error("กรุณาเลือก Tag อย่างน้อย 1 รายการ")
-            st.stop()
-
-        # -------------------------------------------------------
-        # 3. Logic แยก Tag (แบบใหม่: ดึงจาก Database)
-        # -------------------------------------------------------
-        df['Tag_Group'] = df['product_tag'].fillna('BCD')
-
-        # 4. Filter Data (Shop + Date + Tags + Search)
-        # กรองเฉพาะ SIM1 และ SIM2 เท่านั้น
-        mask = (df['Date'] >= start_date) & (df['Date'] <= end_date)
-        mask = mask & (df['Shop'].isin(['SIM1', 'SIM2']))
-        mask = mask & (df['Tag_Group'].isin(selected_tags))
-
-        # ใช้ Seller SKU (ชื่อดิบ) ในการหา Tag เพื่อความชัวร์
-        df['Tag_Group'] = df['Seller SKU'].apply(extract_tag_logic)
-
-        # 4. Filter Data (Shop + Date + Tags + Search)
-        # กรองเฉพาะ SIM1 และ SIM2 เท่านั้น
-        mask = (df['Date'] >= start_date) & (df['Date'] <= end_date)
-        mask = mask & (df['Shop'].isin(['SIM1', 'SIM2']))
-        mask = mask & (df['Tag_Group'].isin(selected_tags))
-        
-        if search_query:
-            mask = mask & (df['Clean_SKU'].str.contains(search_query, case=False))
-        
-        df_filtered = df.loc[mask]
-
-        # 5. สร้างกราฟแยก 2 ฝั่ง (SIM1 ซ้าย / SIM2 ขวา)
-        st.markdown("---")
-        col1, col2 = st.columns(2, gap="medium")
-
-        # กำหนดสีตามรูป (ม่วง/ชมพู/น้ำเงิน)
-        color_map = {
-            "BCD": "#b39ddb",  # ม่วงอ่อน
-            "BCDL": "#ef9a9a", # ชมพูอ่อน/ส้ม
-            "CP": "#3949ab",   # น้ำเงินเข้ม
-            "CPL": "#c2185b"   # ชมพูเข้ม
-        }
-
-        # ฟังก์ชันวาดกราฟสำหรับแต่ละร้าน
-        def plot_shop_chart(shop_name, dataframe):
-            shop_df = dataframe[dataframe['Shop'] == shop_name]
-            
-            if shop_df.empty:
-                st.info(f"ไม่พบข้อมูล {shop_name}")
-                return
-
-            # รวมยอดขายตาม SKU และ Tag
-            chart_data = shop_df.groupby(['Clean_SKU', 'Tag_Group'])['Quantity'].sum().reset_index()
-            
-            # เรียงลำดับสินค้า (ขายดีอยู่บน)
-            total_sales = chart_data.groupby('Clean_SKU')['Quantity'].sum().reset_index()
-            sorted_skus = total_sales.sort_values('Quantity', ascending=True)['Clean_SKU'].tolist()
-
-            # สร้างกราฟ Plotly แนวนอน
-            fig = px.bar(
-                chart_data, 
-                y="Clean_SKU", 
-                x="Quantity", 
-                color="Tag_Group", 
-                orientation='h',
-                color_discrete_map=color_map, 
-                category_orders={"Clean_SKU": sorted_skus},
-                text="Quantity"
-            )
-            
-            # ปรับแต่ง Theme กราฟให้เข้ากับ Dark Mode และเหมือนรูป
-            fig.update_layout(
-                paper_bgcolor='rgba(0,0,0,0)', 
-                plot_bgcolor='rgba(0,0,0,0)',
-                font=dict(color='white', family='Kanit'),
-                showlegend=True,
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, title=None),
-                margin=dict(l=0, r=0, t=30, b=0),
-                height=max(400, 100 + (len(sorted_skus) * 35)), # ความสูง Auto ตามจำนวนสินค้า
-                xaxis=dict(showgrid=True, gridcolor='#333'), 
-                yaxis=dict(title="")
-            )
-            fig.update_traces(textposition='inside', insidetextanchor='middle')
-
-            # แสดงหัวข้อร้าน
-            st.markdown(f'<div class="shop-header">ร้าน {shop_name}</div>', unsafe_allow_html=True)
-            st.plotly_chart(fig, use_container_width=True)
-
-        # เรียกใช้งานกราฟ
-        with col1:
-            plot_shop_chart("SIM1", df_filtered)
-        
-        with col2:
-            plot_shop_chart("SIM2", df_filtered)
-
-    # ==========================================
-    # 5. Calculation & HTML Generation
-    # ==========================================
-    
+    # -- Calculation & HTML Generation (เฉพาะหน้า Overview/Search) --
     if not filtered_df.empty:
         # 1. Top Best Seller (20 items)
         top_df = filtered_df.groupby('Clean_SKU')['Quantity'].sum().reset_index().sort_values('Quantity', ascending=False).head(20)
-        
         top_rows_html = ""
         for idx, row in top_df.iterrows():
             icon = ' <span class="trophy-icon">🏆</span>' if idx == top_df.index[0] else ''
@@ -399,288 +220,157 @@ if not df_raw.empty:
         for idx, row in lower_df.iterrows():
             lower_rows_html += f"<tr><td>{row['Clean_SKU']}</td><td>{row['Quantity']:,}</td></tr>"
 
-        # 3. Chart Data (Top 20)
+        # 3. Chart Data
         chart_df = top_df.head(20)
         labels_js = json.dumps(chart_df['Clean_SKU'].tolist())
         data_values_js = json.dumps(chart_df['Quantity'].tolist())
         
-        # Color Palette
-        color_palette = [
-            '#ffab91', '#81d4fa', '#b39ddb', '#ffcc80', '#a5d6a7', 
-            '#f48fb1', '#80cbc4', '#ce93d8', '#ffab40', '#90caf9',
-            '#ef9a9a', '#b0bec5', '#fff59d', '#bcaaa4', '#e6ee9c',
-            '#ff8a65', '#4fc3f7', '#9575cd', '#ffd54f', '#81c784' 
-        ]
-        bg_colors = []
-        for i in range(len(chart_df)):
-            bg_colors.append(color_palette[i % len(color_palette)])
-        bg_colors_js = json.dumps(bg_colors)
+        # Colors
+        color_palette = ['#ffab91', '#81d4fa', '#b39ddb', '#ffcc80', '#a5d6a7', '#f48fb1', '#80cbc4', '#ce93d8', '#ffab40', '#90caf9']
+        bg_colors_js = json.dumps([color_palette[i % len(color_palette)] for i in range(len(chart_df))])
 
-        # Display Title Logic for Chart
-        if page == "รายงานกลุ่มสินค้า (Special Tags)":
-            display_shop_name = "SIM1 & SIM2 (Tag Filtered)"
-        else:
-            display_shop_name = selected_shop_ui
+        display_shop_name = selected_shop_ui
 
+        # HTML Template
+        html_code = """
+        <!DOCTYPE html>
+        <html lang="th">
+        <head>
+            <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+            <style>
+                body { font-family: 'Kanit', sans-serif; background-color: #0f1115; color: white; margin:0; overflow: hidden; }
+                .dashboard-container { display: grid; grid-template-columns: 65% 35%; gap: 20px; height: 98vh; width: 100%; }
+                .chart-area { display: flex; flex-direction: column; height: 100%; padding-right: 10px; }
+                .chart-wrapper { flex-grow: 1; position: relative; width: 100%; }
+                .sidebar { display: flex; flex-direction: column; gap: 15px; height: 100%; }
+                .ranking-box { background-color: #d9d9d9; border-radius: 4px; overflow: hidden; display: flex; flex-direction: column; }
+                .top-seller { flex: 2; min-height: 300px; }
+                .lower-seller { flex: 1; min-height: 200px; }
+                .ranking-header { background-color: #ffccbc; color: black; text-align: center; padding: 12px; font-size: 18px; font-weight: bold; }
+                .lower { background-color: #81d4fa; }
+                .table-scroll { overflow-y: auto; flex-grow: 1; }
+                table { width: 100%; border-collapse: collapse; }
+                th { text-align: left; padding: 8px 12px; background-color: #cfd8dc; color: black; position: sticky; top: 0; }
+                td { padding: 8px 12px; color: black; border-bottom: 1px solid #ccc; background-color: #e0e0e0; font-size: 14px; }
+                td:last-child, th:last-child { text-align: right; }
+                ::-webkit-scrollbar { width: 6px; }
+                ::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
+            </style>
+        </head>
+        <body>
+            <div class="dashboard-container">
+                <div class="chart-area">
+                    <div style="color:#a0a0a0; margin-bottom:10px;">ยอดขายสินค้า (__SELECTED_SHOP__)</div>
+                    <div class="chart-wrapper"><canvas id="salesChart"></canvas></div>
+                </div>
+                <div class="sidebar">
+                    <div class="ranking-box top-seller">
+                        <div class="ranking-header">TOP Best Seller</div>
+                        <div class="table-scroll"><table><thead><tr><th>สินค้า</th><th>จำนวน</th></tr></thead><tbody>__TOP_ROWS__</tbody></table></div>
+                    </div>
+                    <div class="ranking-box lower-seller">
+                        <div class="ranking-header lower">⬇ Lower Seller</div>
+                        <div class="table-scroll"><table><thead><tr><th>สินค้า</th><th>จำนวน</th></tr></thead><tbody>__LOWER_ROWS__</tbody></table></div>
+                    </div>
+                </div>
+            </div>
+            <script>
+                new Chart(document.getElementById('salesChart'), {
+                    type: 'bar',
+                    data: { labels: __CHART_LABELS__, datasets: [{ label: 'Sales', data: __CHART_DATA__, backgroundColor: __CHART_COLORS__, borderRadius: 4 }] },
+                    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#333' }, ticks: { color: '#a0a0a0' } }, y: { grid: { display: false }, ticks: { color: '#a0a0a0', autoSkip: false } } } }
+                });
+            </script>
+        </body>
+        </html>
+        """
+        html_code = html_code.replace("__SELECTED_SHOP__", display_shop_name)\
+                             .replace("__TOP_ROWS__", top_rows_html)\
+                             .replace("__LOWER_ROWS__", lower_rows_html)\
+                             .replace("__CHART_LABELS__", labels_js)\
+                             .replace("__CHART_DATA__", data_values_js)\
+                             .replace("__CHART_COLORS__", bg_colors_js)
+
+        components.html(html_code, height=1400, scrolling=True)
     else:
-        top_rows_html = "<tr><td>ไม่พบข้อมูล</td><td>-</td></tr>"
-        lower_rows_html = "<tr><td>ไม่พบข้อมูล</td><td>-</td></tr>"
-        labels_js, data_values_js, bg_colors_js = "[]", "[]", "[]"
-        display_shop_name = "-"
+        st.warning("ไม่พบข้อมูลในช่วงเวลาที่เลือก")
 
-    # HTML Code (Full Template)
-    html_code = """
-<!DOCTYPE html>
-<html lang="th">
-<head>
-    <meta charset="UTF-8">
-    <title>Sales Dashboard</title>
-    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    <style>
-        body {
-            font-family: 'Kanit', sans-serif;
-            background-color: #0f1115;
-            margin: 0;
-            padding: 0;
-            color: #ffffff;
-            box-sizing: border-box;
-            overflow: hidden; 
-        }
+# =================================================================================
+# CASE 2: SPECIAL TAGS (ใช้ Plotly + Logic ใหม่จาก Database)
+# =================================================================================
+elif page == "รายงานกลุ่มสินค้า (Special Tags)":
+    
+    st.markdown("---")
+    
+    # 1. Filter UI
+    c_date, c_space, c_search = st.columns([2, 0.5, 3])
+    with c_date:
+        valid_dates = df['Date'].dropna().sort_values()
+        min_d, max_d = (valid_dates.iloc[0], valid_dates.iloc[-1]) if not valid_dates.empty else (datetime.date.today(), datetime.date.today())
+        date_range = st.date_input("Date Range", value=[min_d, max_d], label_visibility="collapsed")
+        start_date, end_date = date_range if len(date_range) == 2 else (min_d, max_d)
+    
+    with c_search:
+        search_query = st.text_input("Search", placeholder="พิมพ์ชื่อรุ่นสินค้า...", label_visibility="collapsed")
 
-        /* --- Grid Layout --- */
-        .dashboard-container {
-            display: grid;
-            grid-template-columns: 65% 35%; 
-            gap: 20px;
-            margin-top: 10px;
-            height: 98vh;
-            width: 100%;
-        }
+    st.write("")
+    tag_options = ["BCD", "BCDL", "CP", "CPL"]
+    try:
+        selected_tags = st.pills("เลือก Tags", options=tag_options, default=tag_options, selection_mode="multi", label_visibility="collapsed")
+    except AttributeError:
+        selected_tags = st.multiselect("เลือก Tags", options=tag_options, default=tag_options)
 
-        @media screen and (max-width: 1024px) {
-            .dashboard-container {
-                grid-template-columns: 1fr;
-                height: auto;
-                overflow-y: auto;
-            }
-            .chart-area {
-                height: 600px !important;
-            }
-            .sidebar {
-                height: 800px !important;
-            }
-        }
+    if not selected_tags:
+        st.error("กรุณาเลือก Tag อย่างน้อย 1 รายการ")
+        st.stop()
 
-        /* --- Chart Area --- */
-        .chart-area {
-            display: flex;
-            flex-direction: column;
-            padding-right: 10px;
-            height: 100%;
-        }
+    # 2. Prepare Data (Use product_tag from DB)
+    df['Tag_Group'] = df['product_tag'].fillna('BCD')
+
+    # 3. Apply Filters
+    mask = (df['Date'] >= start_date) & (df['Date'] <= end_date)
+    mask = mask & (df['Shop'].isin(['SIM1', 'SIM2']))
+    mask = mask & (df['Tag_Group'].isin(selected_tags))
+    if search_query:
+        mask = mask & (df['Clean_SKU'].str.contains(search_query, case=False))
+    
+    df_filtered = df.loc[mask]
+
+    # 4. Render Charts (Split View)
+    st.markdown("---")
+    col1, col2 = st.columns(2, gap="medium")
+    
+    color_map = { "BCD": "#b39ddb", "BCDL": "#ef9a9a", "CP": "#3949ab", "CPL": "#c2185b" }
+
+    def plot_shop_chart(shop_name, dataframe):
+        shop_df = dataframe[dataframe['Shop'] == shop_name]
+        if shop_df.empty:
+            st.info(f"ไม่พบข้อมูล {shop_name}")
+            return
+
+        chart_data = shop_df.groupby(['Clean_SKU', 'Tag_Group'])['Quantity'].sum().reset_index()
+        total_sales = chart_data.groupby('Clean_SKU')['Quantity'].sum().reset_index()
+        sorted_skus = total_sales.sort_values('Quantity', ascending=True)['Clean_SKU'].tolist()
+
+        fig = px.bar(
+            chart_data, y="Clean_SKU", x="Quantity", color="Tag_Group", 
+            orientation='h', color_discrete_map=color_map, 
+            category_orders={"Clean_SKU": sorted_skus}, text="Quantity"
+        )
         
-        .chart-title {
-            color: #a0a0a0;
-            font-size: 16px;
-            margin-bottom: 10px;
-        }
+        fig.update_layout(
+            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='white', family='Kanit'),
+            showlegend=True, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, title=None),
+            margin=dict(l=0, r=0, t=30, b=0),
+            height=max(400, 100 + (len(sorted_skus) * 35)),
+            xaxis=dict(showgrid=True, gridcolor='#333'), yaxis=dict(title="")
+        )
+        fig.update_traces(textposition='inside', insidetextanchor='middle')
 
-        .chart-wrapper {
-            flex-grow: 1;
-            position: relative;
-            min-height: 0;
-            width: 100%;
-        }
+        st.markdown(f'<div class="shop-header">ร้าน {shop_name}</div>', unsafe_allow_html=True)
+        st.plotly_chart(fig, use_container_width=True)
 
-        /* --- Sidebar Area (Tables) --- */
-        .sidebar {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            height: 100%;
-            min-height: 600px;
-        }
-
-        .ranking-box {
-            background-color: #d9d9d9;
-            border-radius: 4px;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-        }
-
-        /* Top Seller (2/3 พื้นที่) */
-        .ranking-box.top-seller { 
-            flex: 2; 
-            min-height: 300px;
-        }
-        
-        /* Lower Seller (1/3 พื้นที่) */
-        .ranking-box.lower-seller { 
-            flex: 1; 
-            min-height: 200px;
-        }
-
-        .ranking-header {
-            background-color: #ffccbc;
-            color: #000000;
-            text-align: center;
-            padding: 12px;
-            font-size: 18px;
-            font-weight: 600;
-            flex-shrink: 0;
-        }
-        
-        .ranking-header.lower { background-color: #81d4fa; }
-
-        .table-scroll {
-            overflow-y: auto;
-            flex-grow: 1;
-            min-height: 0; 
-        }
-
-        .ranking-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .ranking-table th {
-            text-align: left;
-            padding: 8px 12px;
-            background-color: #cfd8dc;
-            color: #000;
-            font-size: 14px;
-            font-weight: 600;
-            position: sticky; top: 0;
-            z-index: 10;
-        }
-        
-        .ranking-table th:last-child { text-align: right; }
-
-        .ranking-table td {
-            padding: 8px 12px;
-            color: #000;
-            border-bottom: 1px solid #ccc;
-            font-size: 14px;
-            background-color: #e0e0e0;
-        }
-
-        .ranking-table td:last-child { text-align: right; }
-        .trophy-icon { margin-right: 5px; color: #cca000; }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: #2c2c2c; }
-        ::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
-    </style>
-</head>
-<body>
-
-    <div class="dashboard-container">
-        <div class="chart-area">
-            <div class="chart-title">ยอดขายสินค้า (__SELECTED_SHOP__)</div>
-            <div class="chart-wrapper">
-                <canvas id="salesChart"></canvas>
-            </div>
-        </div>
-
-        <div class="sidebar">
-            <div class="ranking-box top-seller">
-                <div class="ranking-header">TOP Best Seller</div>
-                <div class="table-scroll">
-                    <table class="ranking-table">
-                        <thead>
-                            <tr>
-                                <th>สินค้า</th>
-                                <th>จำนวน</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            __TOP_ROWS__
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div class="ranking-box lower-seller">
-                <div class="ranking-header lower">⬇ Lower Seller</div>
-                <div class="table-scroll">
-                    <table class="ranking-table">
-                        <thead>
-                            <tr>
-                                <th>สินค้า</th>
-                                <th>จำนวน</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            __LOWER_ROWS__
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        const ctx = document.getElementById('salesChart').getContext('2d');
-        
-        const labels = __CHART_LABELS__;
-        const dataValues = __CHART_DATA__;
-        const bgColors = __CHART_COLORS__;
-
-        new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Sales',
-                    data: dataValues,
-                    backgroundColor: bgColors,
-                    maxBarThickness: 40,
-                    borderRadius: 4
-                }]
-            },
-            options: {
-                indexAxis: 'y',
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                layout: {
-                    padding: { right: 20 }
-                },
-                scales: {
-                    x: {
-                        grid: { color: '#333' },
-                        ticks: { color: '#a0a0a0', font: { family: 'Kanit' } }
-                    },
-                    y: {
-                        grid: { display: false },
-                        ticks: { 
-                            color: '#a0a0a0', 
-                            font: { family: 'Kanit', size: 12 },
-                            autoSkip: false
-                        }
-                    }
-                }
-            }
-        });
-    </script>
-</body>
-</html>
-"""
-
-    # แทนที่ข้อมูลจริงลงไปใน HTML
-    html_code = html_code.replace("__SELECTED_SHOP__", display_shop_name)
-    html_code = html_code.replace("__TOP_ROWS__", top_rows_html)
-    html_code = html_code.replace("__LOWER_ROWS__", lower_rows_html)
-    html_code = html_code.replace("__CHART_LABELS__", labels_js)
-    html_code = html_code.replace("__CHART_DATA__", data_values_js)
-    html_code = html_code.replace("__CHART_COLORS__", bg_colors_js)
-
-    # แสดงผล HTML
-    components.html(html_code, height=1400, scrolling=True)
-
-else:
-    st.warning("No Data found in Supabase")
+    with col1: plot_shop_chart("SIM1", df_filtered)
+    with col2: plot_shop_chart("SIM2", df_filtered)
