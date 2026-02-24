@@ -577,7 +577,7 @@ elif page == "กราฟเส้นยอดขายรายวัน":
     selected_skus = st.multiselect(
         "🔍 ค้นหาและเลือกสินค้า (เพื่อเปรียบเทียบจำนวนยอดขาย):",
         options=available_skus,
-        default=available_skus[:12] if len(available_skus) >= 12 else available_skus
+        default=available_skus[:6] if len(available_skus) >= 6 else available_skus
     )
 
     if not selected_skus:
