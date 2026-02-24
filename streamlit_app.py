@@ -498,9 +498,9 @@ elif page == "กราฟเส้นยอดขายรายวัน":
 
     st.write("") 
     selected_skus = st.multiselect(
-        "🔍 ค้นหาและเลือกสินค้า (เรียงตามสินค้าที่ขายดีที่สุดในช่วงเวลานี้):",
+        "🔍 ค้นหาและเลือกสินค้า (เพื่อเปรียบเทียบจำนวนยอดขายลานี้):",
         options=available_skus,
-        default=available_skus[:5] if len(available_skus) >= 5 else available_skus
+        default=available_skus[:15] if len(available_skus) >= 15 else available_skus
     )
 
     if not selected_skus:
