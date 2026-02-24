@@ -192,7 +192,12 @@ with st.sidebar:
     st.title("เมนูหลัก")
     page = st.radio(
         "เลือกหน้าแสดงผล:",
-        ["ภาพรวม (Overview)", "ค้นหารายสินค้า (Search)", "รายงานกลุ่มสินค้า (Special Tags)"],
+        [
+            "ภาพรวมยอดขาย", 
+            "เปรียบเทียบรายการสินค้า", 
+            "กราฟเส้นยอดขายรายวัน",
+            "ตะกร้าสินค้าร้าน Sim1 กับ Sim2"
+        ],
         index=0
     )
     st.markdown("---")
@@ -201,7 +206,7 @@ with st.sidebar:
 # =================================================================================
 # CASE 1: OVERVIEW & SEARCH (ใช้ HTML/Chart.js แบบเดิม)
 # =================================================================================
-if page in ["ภาพรวม (Overview)", "ค้นหารายสินค้า (Search)"]:
+if page in ["ภาพรวมยอดขาย", "เปรียบเทียบรายการสินค้า"]:
     
     # -- Header Filter --
     c_date, c_space, c_shop = st.columns([2, 0.2, 2.5])
@@ -226,11 +231,11 @@ if page in ["ภาพรวม (Overview)", "ค้นหารายสิน�
         filtered_df = filtered_df[filtered_df['Shop'] == selected_shop_ui]
 
     # -- Search Logic --
-    if page == "ค้นหารายสินค้า (Search)":
+    if page == "เปรียบเทียบรายการสินค้า":
         st.markdown("---")
-        st.markdown("### 🔍 ค้นหาและเลือกสินค้า")
+        st.markdown("### 🔍 ค้นหาและเลือกสินค้าเพื่อเปรียบเทียบจำนวนยอดขาย")
         available_skus = sorted(filtered_df['Clean_SKU'].unique().tolist())
-        selected_skus = st.multiselect("เลือกสินค้า:", options=available_skus)
+        selected_skus = st.multiselect("เลือกสินค้าสินค้าหลายรายการ:", options=available_skus)
         if selected_skus:
             filtered_df = filtered_df[filtered_df['Clean_SKU'].isin(selected_skus)]
 
@@ -328,7 +333,7 @@ if page in ["ภาพรวม (Overview)", "ค้นหารายสิน�
 # =================================================================================
 # CASE 2: SPECIAL TAGS (แก้ไขใหม่: ค้นหาแบบกลุ่ม / ปุ่มใหญ่ / ฟอนต์ Sarabun)
 # =================================================================================
-elif page == "รายงานกลุ่มสินค้า (Special Tags)":
+elif page == "เปรียบเทียบรายการสินค้า":
     
     st.markdown("---")
     
@@ -359,7 +364,7 @@ elif page == "รายงานกลุ่มสินค้า (Special Tags)
         # ดึงรายชื่อสินค้าที่มีขายในช่วงเวลานั้นมาแสดง
         available_products = sorted(df_date_filtered['Clean_SKU'].unique().tolist())
         selected_skus = st.multiselect(
-            "ค้นหา (เลือกสินค้าได้หลายรายการ)", 
+            "ค้นหา หรือ เลือกสินค้าหลายตัวเทียบกันได้",
             options=available_products,
             placeholder="พิมพ์ชื่อรุ่นสินค้าเพื่อค้นหา...",
             label_visibility="collapsed"
@@ -424,7 +429,6 @@ elif page == "รายงานกลุ่มสินค้า (Special Tags)
         sorted_skus = top_40_skus_df['Clean_SKU'].tolist()
 
         # 2. เตรียมข้อมูลสำหรับกราฟ (กรองเอาเฉพาะสินค้าที่มีใน Top 40)
-        # ต้องกรอง shop_df ให้เหลือแค่สินค้าใน sorted_skus ก่อนค่อย groupby
         chart_data = shop_df[shop_df['Clean_SKU'].isin(sorted_skus)].groupby(['Clean_SKU', 'Tag_Group'])['Quantity'].sum().reset_index()
 
         # 3. สร้างกราฟ
@@ -435,7 +439,7 @@ elif page == "รายงานกลุ่มสินค้า (Special Tags)
             color="Tag_Group", 
             orientation='h', 
             color_discrete_map=color_map, 
-            category_orders={"Clean_SKU": sorted_skus}, # บังคับลำดับตาม List (มาก->น้อย)
+            category_orders={"Clean_SKU": sorted_skus}, 
             text="Quantity"
         )
         
@@ -446,10 +450,8 @@ elif page == "รายงานกลุ่มสินค้า (Special Tags)
             showlegend=True, 
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, title=None),
             margin=dict(l=0, r=0, t=10, b=0),
-            # ปรับความสูงตามจำนวนสินค้า (สูงสุด 40 ตัว)
             height=max(400, 100 + (len(sorted_skus) * 40)),
             xaxis=dict(showgrid=True, gridcolor='#333'), 
-            # สำคัญ: autorange="reversed" เพื่อให้ตัวแรกของ List (ที่ขายดีที่สุด) อยู่ด้านบนสุด
             yaxis=dict(title="", autorange="reversed") 
         )
         fig.update_traces(textposition='inside', insidetextanchor='middle')
@@ -457,6 +459,110 @@ elif page == "รายงานกลุ่มสินค้า (Special Tags)
         # แสดงผล
         st.markdown(f'<div class="shop-header-sarabun">ร้าน {shop_name} (Top 40)</div>', unsafe_allow_html=True)
         st.plotly_chart(fig, use_container_width=True)
-
+        
+    # --- [แก้ไขแล้ว] ย้าย 2 บรรทัดนี้กลับเข้ามาอยู่ในหน้าของมัน ---
     with col1: plot_shop_chart("SIM1", df_final)
     with col2: plot_shop_chart("SIM2", df_final)
+
+# =================================================================================
+# CASE 3: DAILY SALES LINE CHART (กราฟเส้นยอดขายรายวัน)
+# =================================================================================
+elif page == "กราฟเส้นยอดขายรายวัน":
+    
+    st.markdown('<div class="shop-header-sarabun">📈 กราฟเส้นแนวโน้มยอดขายสินค้ารายวัน</div>', unsafe_allow_html=True)
+    st.markdown("---")
+
+    # --- 1. Filter UI (Date & Shop) ---
+    c_date, c_space, c_shop = st.columns([2, 0.5, 3])
+    
+    with c_date:
+        valid_dates = df['Date'].dropna().sort_values()
+        min_d, max_d = (valid_dates.iloc[0], valid_dates.iloc[-1]) if not valid_dates.empty else (datetime.date.today(), datetime.date.today())
+        
+        date_range = st.date_input(
+            "เลือกช่วงวันที่", 
+            value=[min_d, max_d], 
+            format="DD/MM/YYYY",
+            label_visibility="collapsed"
+        )
+        if len(date_range) == 2:
+            start_date, end_date = date_range
+        else:
+            start_date, end_date = min_d, max_d
+
+    # กรองข้อมูลตามวันที่ก่อน
+    mask_date = (df['Date'] >= start_date) & (df['Date'] <= end_date)
+    df_trend = df.loc[mask_date]
+
+    with c_shop:
+        shop_options = ['All Shops'] + sorted(df_trend['Shop'].unique().tolist())
+        selected_shop_ui = st.radio(
+            "Shop", 
+            shop_options, 
+            horizontal=True, 
+            label_visibility="collapsed"
+        )
+
+    # กรองข้อมูลตามร้านค้า
+    if selected_shop_ui != 'All Shops':
+        df_trend = df_trend[df_trend['Shop'] == selected_shop_ui]
+
+    # --- 2. Calculate Top Sellers ---
+    top_sales_df = df_trend.groupby('Clean_SKU')['Quantity'].sum().reset_index()
+    top_sales_df = top_sales_df.sort_values('Quantity', ascending=False)
+    
+    available_skus = top_sales_df['Clean_SKU'].tolist()
+
+    # --- 3. Product Search & Select ---
+    st.write("") 
+    selected_skus = st.multiselect(
+        "🔍 ค้นหาและเลือกสินค้า (เรียงตามสินค้าที่ขายดีที่สุดในช่วงเวลานี้):",
+        options=available_skus,
+        default=available_skus[:5] if len(available_skus) >= 5 else available_skus
+    )
+
+    if not selected_skus:
+        st.warning("⚠️ กรุณาเลือกสินค้าอย่างน้อย 1 รายการเพื่อแสดงกราฟ")
+    else:
+        # --- 4. Prepare Data for Line Chart ---
+        df_chart = df_trend[df_trend['Clean_SKU'].isin(selected_skus)]
+        
+        df_chart_grouped = df_chart.groupby(['Date', 'Clean_SKU'])['Quantity'].sum().reset_index()
+        df_chart_grouped = df_chart_grouped.sort_values(['Date'])
+
+        # --- 5. Render Line Chart ---
+        fig = px.line(
+            df_chart_grouped,
+            x="Date",
+            y="Quantity",
+            color="Clean_SKU",
+            markers=True,
+            text="Quantity",
+            category_orders={"Clean_SKU": selected_skus} 
+        )
+
+        fig.update_traces(
+            textposition="top center", 
+            textfont=dict(size=12)
+        )
+        
+        fig.update_layout(
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='white', family='Kanit'),
+            xaxis=dict(showgrid=True, gridcolor='#333', title="วันที่"),
+            yaxis=dict(showgrid=True, gridcolor='#333', title="จำนวน (ชิ้น)"),
+            hovermode="x unified",
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.05,
+                xanchor="right",
+                x=1,
+                title=None
+            ),
+            height=600,
+            margin=dict(l=20, r=20, t=50, b=20)
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
