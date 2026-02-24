@@ -567,10 +567,10 @@ elif page == "กราฟเส้นยอดขายรายวัน":
     # --- 3. Product Search & Select ---
     st.write("") 
     selected_skus = st.multiselect(
-        "🔍 ค้นหาและเลือกสินค้า (เรียงตามสินค้าที่ขายดีที่สุดในช่วงเวลานี้):",
+        "🔍 ค้นหาและเลือกสินค้า (เพื่อเปรียบเทียบจำนวนยอดขาย):",
         options=available_skus,
         # Default ให้แสดงสินค้าขายดี 5 อันดับแรก (ถ้ามี)
-        default=available_skus[:5] if len(available_skus) >= 5 else available_skus
+        default=available_skus[:12] if len(available_skus) >= 12 else available_skus
     )
 
     if not selected_skus:
