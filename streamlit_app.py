@@ -195,7 +195,7 @@ with st.sidebar:
         [
             "ภาพรวมยอดขาย", 
             "เปรียบเทียบรายการสินค้า", 
-            "กราฟเส้นยอดขายรายวัน", # เพิ่มเมนูใหม่ตรงนี้
+            "กราฟเส้นยอดขายรายวัน",
             "ตะกร้าสินค้าร้าน Sim1 กับ Sim2"
         ],
         index=0
@@ -370,12 +370,53 @@ elif page == "เปรียบเทียบรายการสินค้
             label_visibility="collapsed"
         )
 
-    st.write("") # เว้นบรรทัดนิดนึง
+# =================================================================================
+# CASE 2: SPECIAL TAGS (ตะกร้าสินค้าร้าน Sim1 กับ Sim2)
+# =================================================================================
+elif page == "ตะกร้าสินค้าร้าน Sim1 กับ Sim2":
     
-    # 2. Tag Selection (ปุ่ม Pills ใหญ่ขึ้นด้วย CSS ด้านบน)
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    st.markdown("---")
+    
+    # 1. Filter UI (Date & Search)
+    c_date, c_space, c_search = st.columns([2, 0.5, 3])
+    with c_date:
+        valid_dates = df['Date'].dropna().sort_values()
+        if not valid_dates.empty:
+            min_d, max_d = valid_dates.iloc[0], valid_dates.iloc[-1]
+        else:
+            min_d = max_d = datetime.date.today()
+            
+        date_range = st.date_input(
+            "Date Range", 
+            value=[min_d, max_d], 
+            format="DD/MM/YYYY",
+            label_visibility="collapsed"
+        )
+        if len(date_range) == 2:
+            start_date, end_date = date_range
+        else:
+            start_date, end_date = min_d, max_d
+    
+    mask_date = (df['Date'] >= start_date) & (df['Date'] <= end_date)
+    df_date_filtered = df.loc[mask_date]
+
+    with c_search:
+        available_products = sorted(df_date_filtered['Clean_SKU'].unique().tolist())
+        selected_skus = st.multiselect(
+            "ค้นหา หรือ เลือกสินค้าหลายตัวเทียบกันได้",
+            options=available_products,
+            placeholder="พิมพ์ชื่อรุ่นสินค้าเพื่อค้นหา...",
+            label_visibility="collapsed"
+        )
+
+    st.write("") 
+    
+    # 2. Tag Selection
     tag_options = ["BCD", "BCDL", "CP", "CPL"]
     try:
-        # ใช้ st.pills (Streamlit version ใหม่)
         selected_tags = st.pills(
             "เลือก Tags", 
             options=tag_options, 
@@ -383,24 +424,27 @@ elif page == "เปรียบเทียบรายการสินค้
             selection_mode="multi", 
             label_visibility="collapsed"
         )
-    except AttributeError:
-        # Fallback กรณีเวอร์ชันเก่า
+    except AttributeError as e:
+        logger.warning(
+            "st.pills not supported in this Streamlit version. Fallback to multiselect. "
+            "Platform: Streamlit UI | Error: %s", str(e)
+        )
         selected_tags = st.multiselect("เลือก Tags", options=tag_options, default=tag_options)
 
     if not selected_tags:
+        logger.info("No tags selected by user. Halting execution. Platform: Streamlit UI")
         st.error("กรุณาเลือก Tag อย่างน้อย 1 รายการ")
         st.stop()
 
-    # 3. Prepare Data (ใช้ product_tag จาก DB)
+    # 3. Prepare Data
     df_date_filtered['Tag_Group'] = df_date_filtered['product_tag'].fillna('BCD')
 
     # 4. Apply Filters (Shop + Tags + Selected SKUs)
     mask = df_date_filtered['Shop'].isin(['SIM1', 'SIM2'])
-    mask = mask & (df_date_filtered['Tag_Group'].isin(selected_tags))
+    mask &= df_date_filtered['Tag_Group'].isin(selected_tags)
     
-    # ถ้ามีการเลือกสินค้าในช่องค้นหา ให้กรองด้วย
     if selected_skus:
-        mask = mask & (df_date_filtered['Clean_SKU'].isin(selected_skus))
+        mask &= df_date_filtered['Clean_SKU'].isin(selected_skus)
     
     df_final = df_date_filtered.loc[mask]
 
@@ -408,39 +452,40 @@ elif page == "เปรียบเทียบรายการสินค้
     st.markdown("---")
     col1, col2 = st.columns(2, gap="medium")
     
-    color_map = { "BCD": "#b39ddb", "BCDL": "#ef9a9a", "CP": "#3949ab", "CPL": "#c2185b" }
+    COLOR_MAP = {"BCD": "#b39ddb", "BCDL": "#ef9a9a", "CP": "#3949ab", "CPL": "#c2185b"}
 
-    def plot_shop_chart(shop_name, dataframe):
-        # กรองเฉพาะร้านที่ต้องการ
+    def plot_shop_chart(shop_name: str, dataframe: pd.DataFrame) -> None:
+        """
+        Plot top 40 best-selling SKUs for a specific shop.
+        
+        Args:
+            shop_name: The name of the shop (e.g., 'SIM1' or 'SIM2').
+            dataframe: The filtered pandas DataFrame containing sales data.
+        """
         shop_df = dataframe[dataframe['Shop'] == shop_name]
         
         if shop_df.empty:
+            logger.info("No data found for shop: %s", shop_name)
             st.markdown(f'<div class="shop-header-sarabun">ร้าน {shop_name}</div>', unsafe_allow_html=True)
-            st.info(f"ไม่พบข้อมูล")
+            st.info("ไม่พบข้อมูล")
             return
 
-        # 1. คำนวณยอดรวมเพื่อหา Top 40 สินค้าขายดีที่สุด
         total_sales_per_sku = shop_df.groupby('Clean_SKU')['Quantity'].sum().reset_index()
-        
-        # เรียงจาก มาก -> น้อย และตัดมาแค่ 40 ตัวแรก
         top_40_skus_df = total_sales_per_sku.sort_values('Quantity', ascending=False).head(40)
-        
-        # เก็บรายชื่อสินค้า 40 ตัวนี้ไว้เป็น List (ตัวที่ขายดีสุดอยู่ตัวแรก)
         sorted_skus = top_40_skus_df['Clean_SKU'].tolist()
 
-        # 2. เตรียมข้อมูลสำหรับกราฟ (กรองเอาเฉพาะสินค้าที่มีใน Top 40)
-        # ต้องกรอง shop_df ให้เหลือแค่สินค้าใน sorted_skus ก่อนค่อย groupby
-        chart_data = shop_df[shop_df['Clean_SKU'].isin(sorted_skus)].groupby(['Clean_SKU', 'Tag_Group'])['Quantity'].sum().reset_index()
+        chart_data = shop_df[shop_df['Clean_SKU'].isin(sorted_skus)].groupby(
+            ['Clean_SKU', 'Tag_Group']
+        )['Quantity'].sum().reset_index()
 
-        # 3. สร้างกราฟ
         fig = px.bar(
             chart_data, 
             y="Clean_SKU", 
             x="Quantity", 
             color="Tag_Group", 
             orientation='h', 
-            color_discrete_map=color_map, 
-            category_orders={"Clean_SKU": sorted_skus}, # บังคับลำดับตาม List (มาก->น้อย)
+            color_discrete_map=COLOR_MAP, 
+            category_orders={"Clean_SKU": sorted_skus},
             text="Quantity"
         )
         
@@ -451,20 +496,22 @@ elif page == "เปรียบเทียบรายการสินค้
             showlegend=True, 
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, title=None),
             margin=dict(l=0, r=0, t=10, b=0),
-            # ปรับความสูงตามจำนวนสินค้า (สูงสุด 40 ตัว)
             height=max(400, 100 + (len(sorted_skus) * 40)),
             xaxis=dict(showgrid=True, gridcolor='#333'), 
-            # สำคัญ: autorange="reversed" เพื่อให้ตัวแรกของ List (ที่ขายดีที่สุด) อยู่ด้านบนสุด
             yaxis=dict(title="", autorange="reversed") 
         )
         fig.update_traces(textposition='inside', insidetextanchor='middle')
 
-        # แสดงผล
-        st.markdown(f'<div class="shop-header-sarabun">ร้าน {shop_name} (Top 40)</div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="shop-header-sarabun">ร้าน {shop_name} (Top 40)</div>', 
+            unsafe_allow_html=True
+        )
         st.plotly_chart(fig, use_container_width=True)
 
-    with col1: plot_shop_chart("SIM1", df_final)
-    with col2: plot_shop_chart("SIM2", df_final)
+    with col1: 
+        plot_shop_chart("SIM1", df_final)
+    with col2: 
+        plot_shop_chart("SIM2", df_final)
 
 # =================================================================================
 # CASE 3: DAILY SALES LINE CHART (กราฟเส้นยอดขายรายวัน)
