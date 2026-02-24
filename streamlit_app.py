@@ -195,7 +195,7 @@ with st.sidebar:
         [
             "ภาพรวมยอดขาย", 
             "เปรียบเทียบรายการสินค้า", 
-            "กราฟเส้นยอดขายรายวัน",
+            "กราฟเส้นยอดขายรายวัน", # เพิ่มเมนูใหม่ตรงนี้
             "ตะกร้าสินค้าร้าน Sim1 กับ Sim2"
         ],
         index=0
@@ -364,7 +364,7 @@ elif page == "เปรียบเทียบรายการสินค้
         # ดึงรายชื่อสินค้าที่มีขายในช่วงเวลานั้นมาแสดง
         available_products = sorted(df_date_filtered['Clean_SKU'].unique().tolist())
         selected_skus = st.multiselect(
-            "ค้นหา หรือ เลือกสินค้าหลายตัวเทียบกันได้",  # <--- 🛑 เติมลูกน้ำ (,) ตรงนี้ครับ
+            "ค้นหา หรือ เลือกสินค้าหลายตัวเทียบกันได้"
             options=available_products,
             placeholder="พิมพ์ชื่อรุ่นสินค้าเพื่อค้นหา...",
             label_visibility="collapsed"
@@ -462,7 +462,10 @@ elif page == "เปรียบเทียบรายการสินค้
         # แสดงผล
         st.markdown(f'<div class="shop-header-sarabun">ร้าน {shop_name} (Top 40)</div>', unsafe_allow_html=True)
         st.plotly_chart(fig, use_container_width=True)
-        
+
+    with col1: plot_shop_chart("SIM1", df_final)
+    with col2: plot_shop_chart("SIM2", df_final)
+    
 # =================================================================================
 # CASE 3: DAILY SALES LINE CHART (กราฟเส้นยอดขายรายวัน)
 # =================================================================================
@@ -572,6 +575,3 @@ elif page == "กราฟเส้นยอดขายรายวัน":
         )
 
         st.plotly_chart(fig, use_container_width=True)
-
-    with col1: plot_shop_chart("SIM1", df_final)
-    with col2: plot_shop_chart("SIM2", df_final)
