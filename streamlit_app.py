@@ -364,7 +364,7 @@ elif page == "เปรียบเทียบรายการสินค้
         # ดึงรายชื่อสินค้าที่มีขายในช่วงเวลานั้นมาแสดง
         available_products = sorted(df_date_filtered['Clean_SKU'].unique().tolist())
         selected_skus = st.multiselect(
-            "ค้นหา หรือ เลือกสินค้าหลายตัวเทียบกันได้",
+            "ค้นหา หรือ เลือกสินค้าหลายตัวเทียบกันได้",  # <--- 🛑 เติมลูกน้ำ (,) ตรงนี้ครับ
             options=available_products,
             placeholder="พิมพ์ชื่อรุ่นสินค้าเพื่อค้นหา...",
             label_visibility="collapsed"
@@ -566,3 +566,27 @@ elif page == "กราฟเส้นยอดขายรายวัน":
         )
 
         st.plotly_chart(fig, use_container_width=True)
+# =================================================================================
+# CASE 4: SHOP CART COMPARISON (ตะกร้าสินค้าร้าน Sim1 กับ Sim2)
+# =================================================================================
+elif page == "ตะกร้าสินค้าร้าน Sim1 กับ Sim2":
+    
+    st.markdown('<div class="shop-header-sarabun">🛒 ตะกร้าสินค้าร้าน SIM1 กับ SIM2</div>', unsafe_allow_html=True)
+    st.markdown("---")
+    
+    # วางโครงสร้าง Layout ไว้เบื้องต้น
+    st.info("กำลังรอการพัฒนาฟังก์ชัน (Work in Progress)...")
+    
+    # ตัวอย่างการกรองข้อมูลเฉพาะ 2 ร้านนี้
+    df_cart = df[df['Shop'].isin(['SIM1', 'SIM2'])]
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("ยอดขายร้าน SIM1")
+        # โค้ดแสดงผลร้าน SIM1 จะอยู่ตรงนี้
+        st.dataframe(df_cart[df_cart['Shop'] == 'SIM1'].head())
+        
+    with col2:
+        st.subheader("ยอดขายร้าน SIM2")
+        # โค้ดแสดงผลร้าน SIM2 จะอยู่ตรงนี้
+        st.dataframe(df_cart[df_cart['Shop'] == 'SIM2'].head())
