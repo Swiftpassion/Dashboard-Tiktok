@@ -319,21 +319,72 @@ if page in ["ภาพรวมยอดขาย", "เปรียบเที
             <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
             <style>
                 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&display=swap');
-                body { font-family: 'Noto Sans Thai', sans-serif; background-color: #0f1115; color: white; margin:0; overflow: hidden; }
-                .dashboard-container { display: grid; grid-template-columns: 65% 35%; gap: 20px; height: 98vh; width: 100%; }
+                
+                /* 1. รีเซ็ตและตั้งค่าขอบเขต (Box Sizing) */
+                * { box-sizing: border-box; }
+                
+                body { 
+                    font-family: 'Noto Sans Thai', sans-serif; 
+                    background-color: #0f1115; 
+                    color: white; 
+                    margin: 0; 
+                    overflow: hidden; 
+                    padding: 0 10px; /* เพิ่มพื้นที่ขอบซ้ายขวากันเนื้อหาชิดจอเกินไป */
+                }
+                
+                /* 2. ปรับ Grid ให้ยืดหยุ่นขึ้นบนหน้าจอเล็ก */
+                .dashboard-container { 
+                    display: grid; 
+                    grid-template-columns: 1.8fr 1.2fr; /* ปรับสัดส่วนให้รองรับ iPad */
+                    gap: 15px; 
+                    height: 98vh; 
+                    width: 100%; 
+                }
+                
                 .chart-area { display: flex; flex-direction: column; height: 100%; padding-right: 10px; }
                 .chart-wrapper { flex-grow: 1; position: relative; width: 100%; }
                 .sidebar { display: flex; flex-direction: column; gap: 15px; height: 100%; }
+                
                 .ranking-box { background-color: #d9d9d9; border-radius: 4px; overflow: hidden; display: flex; flex-direction: column; }
                 .top-seller { flex: 2; min-height: 300px; }
                 .lower-seller { flex: 1; min-height: 200px; }
                 .ranking-header { background-color: #ffccbc; color: black; text-align: center; padding: 12px; font-size: 18px; font-weight: bold; }
                 .lower { background-color: #81d4fa; }
-                .table-scroll { overflow-y: auto; flex-grow: 1; }
-                table { width: 100%; border-collapse: collapse; }
-                th { text-align: left; padding: 8px 12px; background-color: #cfd8dc; color: black; position: sticky; top: 0; }
-                td { padding: 8px 12px; color: black; border-bottom: 1px solid #ccc; background-color: #e0e0e0; font-size: 14px; }
-                td:last-child, th:last-child { text-align: right; }
+                .table-scroll { overflow-y: auto; flex-grow: 1; width: 100%; }
+                
+                /* 3. จัดการ Layout ตารางและข้อความที่ยาวเกินไป */
+                table { 
+                    width: 100%; 
+                    border-collapse: collapse; 
+                    table-layout: fixed; /* บังคับให้ตารางไม่ยืดตามความยาวตัวอักษร */
+                }
+                
+                th { 
+                    text-align: left; 
+                    padding: 8px 12px; 
+                    background-color: #cfd8dc; 
+                    color: black; 
+                    position: sticky; 
+                    top: 0; 
+                }
+                
+                /* กำหนดพื้นที่คอลัมน์: ชื่อสินค้า 75%, จำนวน 25% */
+                th:first-child { width: 75%; }
+                th:last-child { width: 25%; text-align: right; }
+                
+                td { 
+                    padding: 8px 12px; 
+                    color: black; 
+                    border-bottom: 1px solid #ccc; 
+                    background-color: #e0e0e0; 
+                    font-size: 14px; 
+                    white-space: nowrap; 
+                    overflow: hidden; 
+                    text-overflow: ellipsis; /* ใส่จุดไข่ปลา ... เมื่อข้อความยาวเกิน */
+                }
+                
+                td:last-child { text-align: right; }
+                
                 ::-webkit-scrollbar { width: 6px; }
                 ::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
             </style>
