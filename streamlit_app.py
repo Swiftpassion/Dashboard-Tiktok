@@ -1,23 +1,11 @@
-import datetime
-import json
-import logging
-import re
-from typing import Any, List, Tuple
-
-import pandas as pd
-import plotly.express as px
 import streamlit as st
-import streamlit.components.v1 as components
+import pandas as pd
+import json
+import plotly.express as px
 from supabase import create_client
-
-# ==========================================
-# 0. Logging Setup
-# ==========================================
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
+import streamlit.components.v1 as components
+import datetime
+import re
 
 # ==========================================
 # 1. Config & Styles
@@ -27,30 +15,41 @@ st.set_page_config(page_title="Sales Dashboard", layout="wide")
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap');
+    /* นำเข้าฟอนต์ Sarabun สำหรับหัวข้อร้าน */
     @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap');
     
-    html, body, [class*="css"] { font-family: 'Kanit', sans-serif; }
+    /* Global Font */
+    html, body, [class*="css"] {
+        font-family: 'Kanit', sans-serif;
+    }
 
+    /* --- ขยายขนาดปุ่ม Pills (Tag) --- */
     div[data-testid="stPills"] button {
-        font-size: 20px !important;
-        padding: 12px 28px !important;
+        font-size: 20px !important;   /* เพิ่มขนาดตัวหนังสือ */
+        padding: 12px 28px !important; /* เพิ่มขนาดปุ่ม */
         font-weight: 600 !important;
         border-radius: 30px !important;
         margin: 5px !important;
     }
 
+    /* --- Shop Header (Sarabun Font) --- */
     .shop-header-sarabun {
         font-family: 'Sarabun', sans-serif !important;
-        font-size: 38px !important;
+        font-size: 38px !important; /* ขนาดตัวหนังสือใหญ่สะใจ */
         font-weight: 700 !important;
-        color: #00bcd4;
+        color: #00bcd4; /* สีฟ้า */
         margin-bottom: 5px;
         padding-bottom: 5px;
-        text-align: center;
+        text-align: center; /* จัดกึ่งกลางให้สวยงาม */
     }
 
-    .block-container { padding-top: 1.5rem !important; padding-bottom: 2rem !important; }
+    /* Block Container */
+    .block-container {
+        padding-top: 1.5rem !important;
+        padding-bottom: 2rem !important;
+    }
 
+    /* --- Date Input --- */
     div[data-testid="stDateInput"] label { display: none; }
     div[data-baseweb="input"] {
         background-color: transparent !important;
@@ -59,7 +58,10 @@ st.markdown("""
         border-radius: 0px !important;
     }
     
-    div[data-testid="stDateInput"] input { text-align: center; }
+    /* Date Input Formatting Fix */
+    div[data-testid="stDateInput"] input {
+        text-align: center;
+    }
             
     input[class*="st-"] {
         color: #ffffff !important;
@@ -70,36 +72,59 @@ st.markdown("""
         padding-bottom: 5px !important;
     }
 
+    /* --- Radio Button --- */
     div[role="radiogroup"] {
-        display: flex; flex-direction: row; align-items: center; gap: 25px;
-        padding-top: 10px; flex-wrap: wrap;
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 25px;
+        padding-top: 10px;
+        flex-wrap: wrap;
     }
     div[data-testid="stRadio"] label {
-        font-size: 26px !important; color: #a0a0a0 !important; cursor: pointer;
+        font-size: 26px !important;
+        color: #a0a0a0 !important;
+        cursor: pointer;
     }
     div[data-testid="stRadio"] label:hover, 
     div[data-testid="stRadio"] label[data-checked="true"] {
-        color: #ffffff !important; font-weight: 600 !important;
+        color: #ffffff !important;
+        font-weight: 600 !important;
     }
     div[data-testid="stRadio"] label div[role="radio"] {
-        transform: scale(1.3); margin-right: 10px; border-color: #a0a0a0 !important;
+        transform: scale(1.3);
+        margin-right: 10px;
+        border-color: #a0a0a0 !important;
     }
     div[role="radiogroup"] div[data-checked="true"] div:first-child {
-        background-color: #ff7043 !important; border-color: #ff7043 !important;
+        background-color: #ff7043 !important;
+        border-color: #ff7043 !important;
     }
 
+    /* --- Header Label --- */
     .date-header-label {
-        font-size: 22px; color: #a0a0a0; margin-bottom: -10px; font-weight: 400;
+        font-size: 22px;
+        color: #a0a0a0;
+        margin-bottom: -10px;
+        font-weight: 400;
     }
     
+    /* Sidebar */
     section[data-testid="stSidebar"] {
-        background-color: #111; border-right: 1px solid #333;
+        background-color: #111;
+        border-right: 1px solid #333;
     }
     
+    /* Shop Header (Special Page) */
     .shop-header {
-        font-size: 24px; font-weight: 700; color: #00bcd4;
-        margin-bottom: 10px; border-bottom: 2px solid #333; padding-bottom: 5px;
+        font-size: 24px;
+        font-weight: 700;
+        color: #00bcd4;
+        margin-bottom: 10px;
+        border-bottom: 2px solid #333;
+        padding-bottom: 5px;
     }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -107,60 +132,42 @@ st.markdown("""
 # 2. Connection & Load Data
 # ==========================================
 @st.cache_resource
-def init_connection() -> Any:
-    """Initialize connection to Supabase."""
+def init_connection():
     try:
         url = st.secrets["supabase"]["url"]
         key = st.secrets["supabase"]["key"]
         return create_client(url, key)
     except Exception as e:
-        logger.error("Supabase connection failed: %s", str(e))
         st.error(f"Connect Error: {e}")
         st.stop()
 
 @st.cache_data(ttl=300)
-def load_data() -> pd.DataFrame:
-    """Fetch order data from Supabase and return as DataFrame."""
+def load_data():
     supabase = init_connection()
     try:
+        # ดึง product_tag มาด้วยตามที่สร้างไว้ใน DB
         response = supabase.table('orders').select(
-            '"Shipped Time", "Warehouse Name", "Seller SKU", '
-            '"Product Name", "Quantity", "product_tag"'
+            '"Shipped Time", "Warehouse Name", "Seller SKU", "Product Name", "Quantity", "product_tag"'
         ).execute()
         return pd.DataFrame(response.data)
-    except Exception as e:
-        logger.error("Failed to load data from Supabase: %s", str(e))
+    except:
         return pd.DataFrame()
 
 # ==========================================
 # 3. Process Data
 # ==========================================
-def process_data(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Clean and format the raw DataFrame.
-    
-    Args:
-        df: Raw pandas DataFrame from Supabase.
-        
-    Returns:
-        Processed pandas DataFrame.
-    """
+def process_data(df):
     if 'Shipped Time' in df.columns:
         df['Shipped Time'] = df['Shipped Time'].astype(str).str.replace(r'\t', '', regex=True).str.strip()
         df['Date_Obj'] = pd.to_datetime(df['Shipped Time'], dayfirst=True, errors='coerce')
         df['Date'] = df['Date_Obj'].dt.date
     
-    def map_shop(name: str) -> str:
-        mapping = {
-            "Simmobile": "SIM1", 
-            "Namkangmobile": "SIM2", 
-            "Thailand Pickup Warehouse": "Namkang"
-        }
+    def map_shop(name):
+        mapping = { "Simmobile": "SIM1", "Namkangmobile": "SIM2", "Thailand Pickup Warehouse": "Namkang" }
         return mapping.get(str(name).strip(), str(name).strip())
     
-    def clean_sku(sku: Any) -> str:
-        if not sku: 
-            return "Unknown"
+    def clean_sku(sku):
+        if not sku: return "Unknown"
         s = str(sku).lower().replace("สีเงิน", "silver").replace("สีเทา", "gray")
         s = re.sub(r'\b(gb|ram|rom)\b', '', s)
         return re.sub(r'\s+', ' ', s).strip().title()
@@ -175,7 +182,6 @@ def process_data(df: pd.DataFrame) -> pd.DataFrame:
 df_raw = load_data()
 
 if df_raw.empty:
-    logger.warning("Supabase returned empty dataset.")
     st.warning("No Data found in Supabase")
     st.stop()
 
@@ -198,19 +204,16 @@ with st.sidebar:
     st.caption("Sales Dashboard v2.2")
 
 # =================================================================================
-# CASE 1: OVERVIEW & SEARCH
+# CASE 1: OVERVIEW & SEARCH (ใช้ HTML/Chart.js แบบเดิม)
 # =================================================================================
 if page in ["ภาพรวมยอดขาย", "เปรียบเทียบรายการสินค้า"]:
     
+    # -- Header Filter --
     c_date, c_space, c_shop = st.columns([2, 0.2, 2.5])
     with c_date:
         st.markdown('<div class="date-header-label">ช่วงวันที่ขายสินค้า</div>', unsafe_allow_html=True)
         valid_dates = df['Date'].dropna().sort_values()
-        if not valid_dates.empty:
-            min_d, max_d = valid_dates.iloc[0], valid_dates.iloc[-1]
-        else:
-            min_d = max_d = datetime.date.today()
-            
+        min_d, max_d = (valid_dates.iloc[0], valid_dates.iloc[-1]) if not valid_dates.empty else (datetime.date.today(), datetime.date.today())
         date_range = st.date_input("Select Date", value=[min_d, max_d], format="DD/MM/YYYY")
         start_date, end_date = date_range if len(date_range) == 2 else (min_d, max_d)
 
@@ -220,12 +223,14 @@ if page in ["ภาพรวมยอดขาย", "เปรียบเที
         shop_options = ['All Shops'] + sorted(df['Shop'].unique().tolist())
         selected_shop_ui = st.radio("Shop", shop_options, horizontal=True, label_visibility="collapsed")
 
+    # -- Filter Data --
     mask_date = (df['Date'] >= start_date) & (df['Date'] <= end_date)
     filtered_df = df.loc[mask_date]
 
     if selected_shop_ui != 'All Shops':
         filtered_df = filtered_df[filtered_df['Shop'] == selected_shop_ui]
 
+    # -- Search Logic --
     if page == "เปรียบเทียบรายการสินค้า":
         st.markdown("---")
         st.markdown("### 🔍 ค้นหาและเลือกสินค้าเพื่อเปรียบเทียบจำนวนยอดขาย")
@@ -234,25 +239,33 @@ if page in ["ภาพรวมยอดขาย", "เปรียบเที
         if selected_skus:
             filtered_df = filtered_df[filtered_df['Clean_SKU'].isin(selected_skus)]
 
+    # -- Calculation & HTML Generation (เฉพาะหน้า Overview/Search) --
     if not filtered_df.empty:
+        # 1. Top Best Seller (20 items)
         top_df = filtered_df.groupby('Clean_SKU')['Quantity'].sum().reset_index().sort_values('Quantity', ascending=False).head(20)
         top_rows_html = ""
         for idx, row in top_df.iterrows():
             icon = ' <span class="trophy-icon">🏆</span>' if idx == top_df.index[0] else ''
             top_rows_html += f"<tr><td>{icon}{row['Clean_SKU']}</td><td>{row['Quantity']:,}</td></tr>"
 
+        # 2. Lower Seller (Bottom 10 items)
         lower_df = filtered_df.groupby('Clean_SKU')['Quantity'].sum().reset_index().sort_values('Quantity', ascending=True).head(10)
         lower_rows_html = ""
         for idx, row in lower_df.iterrows():
             lower_rows_html += f"<tr><td>{row['Clean_SKU']}</td><td>{row['Quantity']:,}</td></tr>"
 
+        # 3. Chart Data
         chart_df = top_df.head(20)
         labels_js = json.dumps(chart_df['Clean_SKU'].tolist())
         data_values_js = json.dumps(chart_df['Quantity'].tolist())
         
+        # Colors
         color_palette = ['#ffab91', '#81d4fa', '#b39ddb', '#ffcc80', '#a5d6a7', '#f48fb1', '#80cbc4', '#ce93d8', '#ffab40', '#90caf9']
         bg_colors_js = json.dumps([color_palette[i % len(color_palette)] for i in range(len(chart_df))])
 
+        display_shop_name = selected_shop_ui
+
+        # HTML Template
         html_code = """
         <!DOCTYPE html>
         <html lang="th">
@@ -305,7 +318,7 @@ if page in ["ภาพรวมยอดขาย", "เปรียบเที
         </body>
         </html>
         """
-        html_code = html_code.replace("__SELECTED_SHOP__", selected_shop_ui)\
+        html_code = html_code.replace("__SELECTED_SHOP__", display_shop_name)\
                              .replace("__TOP_ROWS__", top_rows_html)\
                              .replace("__LOWER_ROWS__", lower_rows_html)\
                              .replace("__CHART_LABELS__", labels_js)\
@@ -314,16 +327,60 @@ if page in ["ภาพรวมยอดขาย", "เปรียบเที
 
         components.html(html_code, height=1400, scrolling=True)
     else:
-        logger.info("No data available for the selected date range/shop.")
         st.warning("ไม่พบข้อมูลในช่วงเวลาที่เลือก")
+
+
+# =================================================================================
+# CASE 2: SPECIAL TAGS (แก้ไขใหม่: ค้นหาแบบกลุ่ม / ปุ่มใหญ่ / ฟอนต์ Sarabun)
+# =================================================================================
+elif page == "เปรียบเทียบรายการสินค้า":
+    
+    st.markdown("---")
+    
+    # 1. Filter UI (Date & Search)
+    c_date, c_space, c_search = st.columns([2, 0.5, 3])
+    with c_date:
+        # กำหนด Format วันที่บังคับเป็น DD/MM/YYYY
+        valid_dates = df['Date'].dropna().sort_values()
+        min_d, max_d = (valid_dates.iloc[0], valid_dates.iloc[-1]) if not valid_dates.empty else (datetime.date.today(), datetime.date.today())
+        
+        date_range = st.date_input(
+            "Date Range", 
+            value=[min_d, max_d], 
+            format="DD/MM/YYYY",  # <--- บังคับ Format ตรงนี้
+            label_visibility="collapsed"
+        )
+        if len(date_range) == 2:
+            start_date, end_date = date_range
+        else:
+            start_date, end_date = min_d, max_d
+    
+    # กรองวันที่ก่อน เพื่อให้ List สินค้าในช่องค้นหาไม่เยอะเกินไป
+    mask_date = (df['Date'] >= start_date) & (df['Date'] <= end_date)
+    df_date_filtered = df.loc[mask_date]
+
+    with c_search:
+        # เปลี่ยนเป็น Multiselect (ค้นหาและเลือกได้หลายอัน)
+        # ดึงรายชื่อสินค้าที่มีขายในช่วงเวลานั้นมาแสดง
+        available_products = sorted(df_date_filtered['Clean_SKU'].unique().tolist())
+        selected_skus = st.multiselect(
+            "ค้นหา หรือ เลือกสินค้าหลายตัวเทียบกันได้",
+            options=available_products,
+            placeholder="พิมพ์ชื่อรุ่นสินค้าเพื่อค้นหา...",
+            label_visibility="collapsed"
+        )
 
 # =================================================================================
 # CASE 2: SPECIAL TAGS (ตะกร้าสินค้าร้าน Sim1 กับ Sim2)
 # =================================================================================
 elif page == "ตะกร้าสินค้าร้าน Sim1 กับ Sim2":
     
+    import logging
+    logger = logging.getLogger(__name__)
+    
     st.markdown("---")
     
+    # 1. Filter UI (Date & Search)
     c_date, c_space, c_search = st.columns([2, 0.5, 3])
     with c_date:
         valid_dates = df['Date'].dropna().sort_values()
@@ -357,6 +414,7 @@ elif page == "ตะกร้าสินค้าร้าน Sim1 กับ Si
 
     st.write("") 
     
+    # 2. Tag Selection
     tag_options = ["BCD", "BCDL", "CP", "CPL"]
     try:
         selected_tags = st.pills(
@@ -367,16 +425,21 @@ elif page == "ตะกร้าสินค้าร้าน Sim1 กับ Si
             label_visibility="collapsed"
         )
     except AttributeError as e:
-        logger.warning("st.pills not supported. Fallback to multiselect. Error: %s", str(e))
+        logger.warning(
+            "st.pills not supported in this Streamlit version. Fallback to multiselect. "
+            "Platform: Streamlit UI | Error: %s", str(e)
+        )
         selected_tags = st.multiselect("เลือก Tags", options=tag_options, default=tag_options)
 
     if not selected_tags:
-        logger.info("No tags selected. Halting render.")
+        logger.info("No tags selected by user. Halting execution. Platform: Streamlit UI")
         st.error("กรุณาเลือก Tag อย่างน้อย 1 รายการ")
         st.stop()
 
+    # 3. Prepare Data
     df_date_filtered['Tag_Group'] = df_date_filtered['product_tag'].fillna('BCD')
 
+    # 4. Apply Filters (Shop + Tags + Selected SKUs)
     mask = df_date_filtered['Shop'].isin(['SIM1', 'SIM2'])
     mask &= df_date_filtered['Tag_Group'].isin(selected_tags)
     
@@ -385,6 +448,7 @@ elif page == "ตะกร้าสินค้าร้าน Sim1 กับ Si
     
     df_final = df_date_filtered.loc[mask]
 
+    # 5. Render Charts (Split View)
     st.markdown("---")
     col1, col2 = st.columns(2, gap="medium")
     
@@ -450,22 +514,20 @@ elif page == "ตะกร้าสินค้าร้าน Sim1 กับ Si
         plot_shop_chart("SIM2", df_final)
 
 # =================================================================================
-# CASE 3: DAILY SALES LINE CHART
+# CASE 3: DAILY SALES LINE CHART (กราฟเส้นยอดขายรายวัน)
 # =================================================================================
 elif page == "กราฟเส้นยอดขายรายวัน":
     
     st.markdown('<div class="shop-header-sarabun">📈 กราฟเส้นแนวโน้มยอดขายสินค้ารายวัน</div>', unsafe_allow_html=True)
     st.markdown("---")
 
+    # --- 1. Filter UI (Date & Shop) ---
     c_date, c_space, c_shop = st.columns([2, 0.5, 3])
     
     with c_date:
         valid_dates = df['Date'].dropna().sort_values()
-        if not valid_dates.empty:
-            min_d, max_d = valid_dates.iloc[0], valid_dates.iloc[-1]
-        else:
-            min_d = max_d = datetime.date.today()
-            
+        min_d, max_d = (valid_dates.iloc[0], valid_dates.iloc[-1]) if not valid_dates.empty else (datetime.date.today(), datetime.date.today())
+        
         date_range = st.date_input(
             "เลือกช่วงวันที่", 
             value=[min_d, max_d], 
@@ -477,6 +539,7 @@ elif page == "กราฟเส้นยอดขายรายวัน":
         else:
             start_date, end_date = min_d, max_d
 
+    # กรองข้อมูลตามวันที่ก่อน
     mask_date = (df['Date'] >= start_date) & (df['Date'] <= end_date)
     df_trend = df.loc[mask_date]
 
@@ -489,36 +552,49 @@ elif page == "กราฟเส้นยอดขายรายวัน":
             label_visibility="collapsed"
         )
 
+    # กรองข้อมูลตามร้านค้า
     if selected_shop_ui != 'All Shops':
         df_trend = df_trend[df_trend['Shop'] == selected_shop_ui]
 
+    # --- 2. Calculate Top Sellers ---
+    # คำนวณยอดขายรวมของแต่ละสินค้าในช่วงเวลา/ร้านค้า ที่เลือก เพื่อนำมาเรียงลำดับ
     top_sales_df = df_trend.groupby('Clean_SKU')['Quantity'].sum().reset_index()
     top_sales_df = top_sales_df.sort_values('Quantity', ascending=False)
+    
+    # รายชื่อสินค้าเรียงตามยอดขาย (ขายดีสุดอยู่ Index 0)
     available_skus = top_sales_df['Clean_SKU'].tolist()
 
+    # --- 3. Product Search & Select ---
     st.write("") 
     selected_skus = st.multiselect(
-        "🔍 ค้นหาและเลือกสินค้า (เพื่อเปรียบเทียบจำนวนยอดขาย):",
+        "🔍 ค้นหาและเลือกสินค้า (เรียงตามสินค้าที่ขายดีที่สุดในช่วงเวลานี้):",
         options=available_skus,
-        default=available_skus[:15] if len(available_skus) >= 15 else available_skus
+        # Default ให้แสดงสินค้าขายดี 5 อันดับแรก (ถ้ามี)
+        default=available_skus[:5] if len(available_skus) >= 5 else available_skus
     )
 
     if not selected_skus:
-        logger.info("No SKUs selected for line chart.")
         st.warning("⚠️ กรุณาเลือกสินค้าอย่างน้อย 1 รายการเพื่อแสดงกราฟ")
     else:
+        # --- 4. Prepare Data for Line Chart ---
+        # กรองเฉพาะสินค้าที่ถูกเลือก
         df_chart = df_trend[df_trend['Clean_SKU'].isin(selected_skus)]
+        
+        # Group ข้อมูลตามวันที่ และ SKU
         df_chart_grouped = df_chart.groupby(['Date', 'Clean_SKU'])['Quantity'].sum().reset_index()
+        
+        # เรียงวันที่เพื่อให้เส้นกราฟลากได้ถูกต้อง
         df_chart_grouped = df_chart_grouped.sort_values(['Date'])
 
+        # --- 5. Render Line Chart ---
         fig = px.line(
             df_chart_grouped,
             x="Date",
             y="Quantity",
             color="Clean_SKU",
             markers=True,
-            text="Quantity",
-            category_orders={"Clean_SKU": selected_skus}
+            text="Quantity", # แสดงตัวเลขบนจุด
+            category_orders={"Clean_SKU": selected_skus} # ให้ Legend เรียงตามลำดับความขายดีที่ตั้งไว้
         )
 
         fig.update_traces(
@@ -532,7 +608,7 @@ elif page == "กราฟเส้นยอดขายรายวัน":
             font=dict(color='white', family='Kanit'),
             xaxis=dict(showgrid=True, gridcolor='#333', title="วันที่"),
             yaxis=dict(showgrid=True, gridcolor='#333', title="จำนวน (ชิ้น)"),
-            hovermode="x unified",
+            hovermode="x unified", # แสดง Tooltip รวมทุกเส้นเมื่อเอาเมาส์ชี้แนวแกน X
             legend=dict(
                 orientation="h",
                 yanchor="bottom",
