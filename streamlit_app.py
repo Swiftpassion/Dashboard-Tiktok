@@ -676,7 +676,7 @@ elif page == "กราฟเส้นยอดขายรายวัน":
         )
 
         st.plotly_chart(fig, use_container_width=True)
-        
+
 # =================================================================================
 # CASE 5: SECOND-HAND SALES VS STOCK
 # =================================================================================
@@ -729,10 +729,10 @@ elif page == "กราฟเทียบยอดขายเฉพาะสิ
 
             # 1. Fetch Sales (Using "Seller SKU" to match with Stock)
             res_sales = supabase_client.table("orders") \
-                .select('"Seller SKU", Quantity') \
+                .select('"Seller SKU", "Quantity"') \
                 .eq("Warehouse Name", "มือ 2") \
-                .gte("Date", start_str) \
-                .lte("Date", end_str) \
+                .gte("Shipped Time", start_str) \
+                .lte("Shipped Time", end_str) \
                 .execute()
             
             df_sales = pd.DataFrame(res_sales.data)
