@@ -779,8 +779,9 @@ elif page == "กราฟเทียบยอดขายเฉพาะสิ
 
     # --- 3. Render Chart ---
     with st.spinner("กำลังโหลดข้อมูล Stock และยอดขาย..."):
-        # ส่งค่า start_date และ end_date เข้าไปในฟังก์ชัน
-        df_chart = fetch_secondhand_data(supabase, start_date, end_date)
+        # เรียกใช้ connection ของ Supabase ก่อนส่งเข้าฟังก์ชัน
+        supabase_client = init_connection()
+        df_chart = fetch_secondhand_data(supabase_client, start_date, end_date)
 
     if df_chart.empty:
         st.warning("⚠️ ไม่พบข้อมูลสำหรับสร้างกราฟในระบบ")
