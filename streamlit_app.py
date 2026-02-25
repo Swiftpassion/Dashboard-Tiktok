@@ -71,7 +71,7 @@ st.markdown("""
             
     input[class*="st-"] {
         color: #ffffff !important;
-        font-size: 22px !important;
+        font-size: 30px !important;
         font-weight: 700 !important;
         font-family: 'Noto Sans Thai', sans-serif !important;
         height: auto !important;
