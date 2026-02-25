@@ -773,13 +773,35 @@ elif page == "กราฟเทียบยอดขายเฉพาะสิ
     if df_chart.empty:
         st.warning("⚠️ ไม่พบข้อมูลยอดขายหรือ Stock สินค้ามือ 2 ในระบบ หรือข้อมูลไม่ตรงกัน")
     else:
+        # ==========================================================
+        # 📌 ส่วนที่เพิ่มใหม่: Filter ค้นหาและเลือกสินค้าหลายรายการ
+        # ==========================================================
+        st.write("")
+        available_products = sorted(df_chart["product_name"].unique().tolist())
+        selected_products = st.multiselect(
+            "🔍 ค้นหาและเลือกสินค้าเพื่อเปรียบเทียบ (เว้นว่างไว้เพื่อแสดงทั้งหมด):",
+            options=available_products,
+            placeholder="พิมพ์ชื่อรุ่นสินค้าเพื่อค้นหา...",
+        )
+
+        # กรองข้อมูลตามที่ผู้ใช้เลือก
+        df_plot = df_chart.copy()
+        if selected_products:
+            df_plot = df_plot[df_plot["product_name"].isin(selected_products)]
+
+        # กรณีที่เลือก Filter แล้วข้อมูลว่าง (อาจเกิดขึ้นได้ถ้าระบบโหลดจังหวะเปลี่ยนค่า)
+        if df_plot.empty:
+            st.info("กรุณาเลือกสินค้าเพื่อแสดงกราฟ")
+            st.stop()
+
         chart_title = (
             f"เปรียบเทียบยอดขาย ({start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')}) "
             f"และ Stock สินค้ามือ 2 ปัจจุบัน"
         )
         
         fig = px.bar(
-            df_chart,
+            # เปลี่ยนจาก df_chart เป็น df_plot
+            df_plot,
             x="product_name",
             y="quantity",
             color="data_type",
@@ -802,6 +824,7 @@ elif page == "กราฟเทียบยอดขายเฉพาะสิ
         
         fig.update_traces(textposition="outside", textfont=dict(size=12))
         st.plotly_chart(fig, use_container_width=True)
+
         # ==========================================================
         # 📌 ส่วนเพิ่มเติม: กราฟ Top 10 (แบ่งครึ่งซ้าย-ขวา) พร้อม Filter ข้อยกเว้น
         # ==========================================================
@@ -810,18 +833,16 @@ elif page == "กราฟเทียบยอดขายเฉพาะสิ
             unsafe_allow_html=True
         )
         
-        # สร้าง 2 คอลัมน์ (แบ่งครึ่งหน้า 50% - 50%)
         col_left, col_right = st.columns(2)
 
-        # 1. แปลงข้อมูลให้อยู่ในรูปแบบกว้าง (Wide Format)
-        df_wide = df_chart.pivot(index="product_name", columns="data_type", values="quantity").reset_index()
+        # เปลี่ยนจาก df_chart เป็น df_plot เพื่อให้กราฟ Top 10 ล้อตาม Filter ด้วย
+        df_wide = df_plot.pivot(index="product_name", columns="data_type", values="quantity").reset_index()
         col_stock = "Stock คงเหลือ"
         col_sold = "ยอดขาย (Sold)"
         
         if col_stock in df_wide.columns and col_sold in df_wide.columns:
             
             # --- 2. Logic: กรองรายการสินค้าที่ไม่ต้องการแสดงออก ---
-            # ใช้ตัวพิมพ์เล็กทั้งหมดเพื่อป้องกันปัญหาพิมพ์เล็ก/ใหญ่ไม่ตรงกัน
             excluded_keywords = [
                 "สายชาร์จ usb-c to usb-c",
                 "สายชาร์จ usb-c to lightning สภาพดี 90%",
@@ -831,11 +852,18 @@ elif page == "กราฟเทียบยอดขายเฉพาะสิ
             ]
             
             def is_excluded(product_name: str) -> bool:
-                """Checks if the product name contains any of the excluded keywords."""
+                """
+                Checks if the product name contains any of the excluded keywords.
+                
+                Args:
+                    product_name (str): The name of the product to check.
+                    
+                Returns:
+                    bool: True if excluded, False otherwise.
+                """
                 name_lower = str(product_name).strip().lower()
                 return any(keyword in name_lower for keyword in excluded_keywords)
 
-            # ตัดแถวที่เข้าข่าย Excluded ออกจาก df_wide
             mask_keep = ~df_wide["product_name"].apply(is_excluded)
             df_wide = df_wide[mask_keep]
             
@@ -843,7 +871,6 @@ elif page == "กราฟเทียบยอดขายเฉพาะสิ
             # ฝั่งซ้าย: Top 10 สินค้าที่มี "Stock มากที่สุด"
             # --------------------------------------------------
             with col_left:
-                # เปลี่ยนจาก 7 เป็น 10
                 df_top_stock = df_wide.nlargest(10, col_stock)
                 
                 df_top_stock_melted = df_top_stock.melt(
@@ -878,7 +905,6 @@ elif page == "กราฟเทียบยอดขายเฉพาะสิ
             # ฝั่งขวา: Top 10 สินค้าที่มี "ยอดขายมากที่สุด"
             # --------------------------------------------------
             with col_right:
-                # เปลี่ยนจาก 7 เป็น 10 และดึงเฉพาะตัวที่ขายได้ > 0
                 df_top_sales = df_wide[df_wide[col_sold] > 0].nlargest(10, col_sold)
                 
                 if df_top_sales.empty:
