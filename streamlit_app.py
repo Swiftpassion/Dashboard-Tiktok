@@ -688,10 +688,9 @@ elif page == "กราฟเทียบยอดขายเฉพาะสิ
     st.markdown("---")
 
     # --- 1. Date Filter UI สำหรับกรองยอดขาย ---
-    # ปรับสัดส่วนคอลัมน์ฝั่งซ้ายให้กว้างขึ้นเป็น 2.5 เพื่อให้แสดงวันที่ได้ครบ
-    col_date, col_space = st.columns([2.5, 7.5])
+    # ขยายสัดส่วนคอลัมน์ฝั่งซ้ายเป็น 4 เพื่อให้กล่องวันที่กว้างพอที่จะแสดงผลในบรรทัดเดียว
+    col_date, col_space = st.columns([4, 6])
     with col_date:
-        # ใช้ CSS class date-header-label ที่มีอยู่แล้วเพื่อให้สวยงามและมีขนาดพอดี
         st.markdown(
             '<div class="date-header-label">📅 เลือกช่วงวันที่ต้องการดูยอดขาย</div>', 
             unsafe_allow_html=True
@@ -700,7 +699,7 @@ elif page == "กราฟเทียบยอดขายเฉพาะสิ
             "ช่วงวันที่ขายสินค้า:",
             value=(datetime.date.today() - datetime.timedelta(days=7), datetime.date.today()),
             key="secondhand_date_filter",
-            label_visibility="collapsed" # ซ่อน Label เดิมเพื่อไม่ให้รก
+            label_visibility="collapsed" 
         )
 
     if isinstance(date_range, tuple) and len(date_range) == 2:
