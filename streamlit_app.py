@@ -802,3 +802,97 @@ elif page == "กราฟเทียบยอดขายเฉพาะสิ
         
         fig.update_traces(textposition="outside", textfont=dict(size=12))
         st.plotly_chart(fig, use_container_width=True)
+# ==========================================================
+        # 📌 ส่วนเพิ่มเติม: กราฟ Top 7 (แบ่งครึ่งซ้าย-ขวา)
+        # ==========================================================
+        st.markdown("<br><h4 style='text-align: center;'>🏆 อันดับสินค้า Top 7 (เรียงตาม Stock และ ยอดขาย)</h4><hr>", unsafe_allow_html=True)
+        
+        # สร้าง 2 คอลัมน์ (แบ่งครึ่งหน้า 50% - 50%)
+        col_left, col_right = st.columns(2)
+
+        # ก่อนทำกราฟ เราต้องแปลงข้อมูลให้อยู่ในรูปแบบกว้าง (Wide Format) เพื่อให้จัดเรียงง่าย
+        # ใช้ df_merged (ก่อนที่จะ Melt) เพราะมันมีคอลัมน์ stock_qty และ sold_qty แยกกันอยู่แล้ว
+        # หมายเหตุ: เราต้องมั่นใจว่าตัวแปร df_merged ถูกสร้างไว้ในฟังก์ชัน fetch_secondhand_data 
+        # ดังนั้นเราจะดึงข้อมูลมาจาก df_chart แล้ว pivot กลับมาครับ
+        
+        df_wide = df_chart.pivot(index="product_name", columns="data_type", values="quantity").reset_index()
+        # เช็คชื่อคอลัมน์ให้ตรงกับที่เรา map ไว้
+        col_stock = "Stock คงเหลือ"
+        col_sold = "ยอดขาย (Sold)"
+        
+        if col_stock in df_wide.columns and col_sold in df_wide.columns:
+            
+            # --------------------------------------------------
+            # ฝั่งซ้าย: Top 7 สินค้าที่มี "Stock มากที่สุด"
+            # --------------------------------------------------
+            with col_left:
+                # เรียงลำดับตาม Stock มากไปน้อย เอาแค่ 7 ตัว
+                df_top_stock = df_wide.nlargest(7, col_stock)
+                
+                # แปลงกลับเป็น Long Format สำหรับสร้างกราฟ
+                df_top_stock_melted = df_top_stock.melt(
+                    id_vars="product_name", 
+                    value_vars=[col_stock, col_sold],
+                    var_name="data_type", 
+                    value_name="quantity"
+                )
+                
+                fig_stock = px.bar(
+                    df_top_stock_melted,
+                    x="product_name",
+                    y="quantity",
+                    color="data_type",
+                    barmode="group",
+                    text_auto=True,
+                    color_discrete_map={col_stock: "#00bcd4", col_sold: "#ff5722"},
+                    title="📦 Top 7 สินค้าที่มี Stock คงเหลือมากที่สุด"
+                )
+                fig_stock.update_layout(
+                    paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                    font=dict(color='white', family='Noto Sans Thai'),
+                    xaxis=dict(showgrid=False, title="ชื่อสินค้า (Product)"),
+                    yaxis=dict(showgrid=True, gridcolor='#333', title="จำนวน (ชิ้น)"),
+                    legend_title_text="",
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                )
+                fig_stock.update_traces(textposition="outside", textfont=dict(size=12))
+                st.plotly_chart(fig_stock, use_container_width=True)
+
+            # --------------------------------------------------
+            # ฝั่งขวา: Top 7 สินค้าที่มี "ยอดขายมากที่สุด"
+            # --------------------------------------------------
+            with col_right:
+                # เรียงลำดับตาม ยอดขาย มากไปน้อย เอาแค่ 7 ตัว (และกรองเฉพาะตัวที่มียอดขาย > 0)
+                df_top_sales = df_wide[df_wide[col_sold] > 0].nlargest(7, col_sold)
+                
+                if df_top_sales.empty:
+                    st.info("ยังไม่มียอดขายในช่วงวันที่เลือกครับ")
+                else:
+                    # แปลงกลับเป็น Long Format สำหรับสร้างกราฟ
+                    df_top_sales_melted = df_top_sales.melt(
+                        id_vars="product_name", 
+                        value_vars=[col_stock, col_sold],
+                        var_name="data_type", 
+                        value_name="quantity"
+                    )
+                    
+                    fig_sales = px.bar(
+                        df_top_sales_melted,
+                        x="product_name",
+                        y="quantity",
+                        color="data_type",
+                        barmode="group",
+                        text_auto=True,
+                        color_discrete_map={col_stock: "#00bcd4", col_sold: "#ff5722"},
+                        title="🔥 Top 7 สินค้าที่ขายดีที่สุด (ช่วงวันที่เลือก)"
+                    )
+                    fig_sales.update_layout(
+                        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                        font=dict(color='white', family='Noto Sans Thai'),
+                        xaxis=dict(showgrid=False, title="ชื่อสินค้า (Product)"),
+                        yaxis=dict(showgrid=True, gridcolor='#333', title="จำนวน (ชิ้น)"),
+                        legend_title_text="",
+                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                    )
+                    fig_sales.update_traces(textposition="outside", textfont=dict(size=12))
+                    st.plotly_chart(fig_sales, use_container_width=True)
