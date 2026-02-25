@@ -802,34 +802,50 @@ elif page == "กราฟเทียบยอดขายเฉพาะสิ
         
         fig.update_traces(textposition="outside", textfont=dict(size=12))
         st.plotly_chart(fig, use_container_width=True)
-# ==========================================================
-        # 📌 ส่วนเพิ่มเติม: กราฟ Top 7 (แบ่งครึ่งซ้าย-ขวา)
         # ==========================================================
-        st.markdown("<br><h4 style='text-align: center;'>🏆 อันดับสินค้า Top 7 (เรียงตาม Stock และ ยอดขาย)</h4><hr>", unsafe_allow_html=True)
+        # 📌 ส่วนเพิ่มเติม: กราฟ Top 10 (แบ่งครึ่งซ้าย-ขวา) พร้อม Filter ข้อยกเว้น
+        # ==========================================================
+        st.markdown(
+            "<br><h4 style='text-align: center;'>🏆 อันดับสินค้า Top 10 (เรียงตาม Stock และ ยอดขาย)</h4><hr>", 
+            unsafe_allow_html=True
+        )
         
         # สร้าง 2 คอลัมน์ (แบ่งครึ่งหน้า 50% - 50%)
         col_left, col_right = st.columns(2)
 
-        # ก่อนทำกราฟ เราต้องแปลงข้อมูลให้อยู่ในรูปแบบกว้าง (Wide Format) เพื่อให้จัดเรียงง่าย
-        # ใช้ df_merged (ก่อนที่จะ Melt) เพราะมันมีคอลัมน์ stock_qty และ sold_qty แยกกันอยู่แล้ว
-        # หมายเหตุ: เราต้องมั่นใจว่าตัวแปร df_merged ถูกสร้างไว้ในฟังก์ชัน fetch_secondhand_data 
-        # ดังนั้นเราจะดึงข้อมูลมาจาก df_chart แล้ว pivot กลับมาครับ
-        
+        # 1. แปลงข้อมูลให้อยู่ในรูปแบบกว้าง (Wide Format)
         df_wide = df_chart.pivot(index="product_name", columns="data_type", values="quantity").reset_index()
-        # เช็คชื่อคอลัมน์ให้ตรงกับที่เรา map ไว้
         col_stock = "Stock คงเหลือ"
         col_sold = "ยอดขาย (Sold)"
         
         if col_stock in df_wide.columns and col_sold in df_wide.columns:
             
+            # --- 2. Logic: กรองรายการสินค้าที่ไม่ต้องการแสดงออก ---
+            # ใช้ตัวพิมพ์เล็กทั้งหมดเพื่อป้องกันปัญหาพิมพ์เล็ก/ใหญ่ไม่ตรงกัน
+            excluded_keywords = [
+                "สายชาร์จ usb-c to usb-c",
+                "สายชาร์จ usb-c to lightning สภาพดี 90%",
+                "หัวชาร์จ มือสอง",
+                "adapter สภาพดี 90%",
+                "สาย lightning มือสอง"
+            ]
+            
+            def is_excluded(product_name: str) -> bool:
+                """Checks if the product name contains any of the excluded keywords."""
+                name_lower = str(product_name).strip().lower()
+                return any(keyword in name_lower for keyword in excluded_keywords)
+
+            # ตัดแถวที่เข้าข่าย Excluded ออกจาก df_wide
+            mask_keep = ~df_wide["product_name"].apply(is_excluded)
+            df_wide = df_wide[mask_keep]
+            
             # --------------------------------------------------
-            # ฝั่งซ้าย: Top 7 สินค้าที่มี "Stock มากที่สุด"
+            # ฝั่งซ้าย: Top 10 สินค้าที่มี "Stock มากที่สุด"
             # --------------------------------------------------
             with col_left:
-                # เรียงลำดับตาม Stock มากไปน้อย เอาแค่ 7 ตัว
-                df_top_stock = df_wide.nlargest(7, col_stock)
+                # เปลี่ยนจาก 7 เป็น 10
+                df_top_stock = df_wide.nlargest(10, col_stock)
                 
-                # แปลงกลับเป็น Long Format สำหรับสร้างกราฟ
                 df_top_stock_melted = df_top_stock.melt(
                     id_vars="product_name", 
                     value_vars=[col_stock, col_sold],
@@ -845,7 +861,7 @@ elif page == "กราฟเทียบยอดขายเฉพาะสิ
                     barmode="group",
                     text_auto=True,
                     color_discrete_map={col_stock: "#00bcd4", col_sold: "#ff5722"},
-                    title="📦 Top 7 สินค้าที่มี Stock คงเหลือมากที่สุด"
+                    title="📦 Top 10 สินค้าที่มี Stock คงเหลือมากที่สุด"
                 )
                 fig_stock.update_layout(
                     paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
@@ -859,16 +875,15 @@ elif page == "กราฟเทียบยอดขายเฉพาะสิ
                 st.plotly_chart(fig_stock, use_container_width=True)
 
             # --------------------------------------------------
-            # ฝั่งขวา: Top 7 สินค้าที่มี "ยอดขายมากที่สุด"
+            # ฝั่งขวา: Top 10 สินค้าที่มี "ยอดขายมากที่สุด"
             # --------------------------------------------------
             with col_right:
-                # เรียงลำดับตาม ยอดขาย มากไปน้อย เอาแค่ 7 ตัว (และกรองเฉพาะตัวที่มียอดขาย > 0)
-                df_top_sales = df_wide[df_wide[col_sold] > 0].nlargest(7, col_sold)
+                # เปลี่ยนจาก 7 เป็น 10 และดึงเฉพาะตัวที่ขายได้ > 0
+                df_top_sales = df_wide[df_wide[col_sold] > 0].nlargest(10, col_sold)
                 
                 if df_top_sales.empty:
                     st.info("ยังไม่มียอดขายในช่วงวันที่เลือกครับ")
                 else:
-                    # แปลงกลับเป็น Long Format สำหรับสร้างกราฟ
                     df_top_sales_melted = df_top_sales.melt(
                         id_vars="product_name", 
                         value_vars=[col_stock, col_sold],
@@ -884,7 +899,7 @@ elif page == "กราฟเทียบยอดขายเฉพาะสิ
                         barmode="group",
                         text_auto=True,
                         color_discrete_map={col_stock: "#00bcd4", col_sold: "#ff5722"},
-                        title="🔥 Top 7 สินค้าที่ขายดีที่สุด (ช่วงวันที่เลือก)"
+                        title="🔥 Top 10 สินค้าที่ขายดีที่สุด (ช่วงวันที่เลือก)"
                     )
                     fig_sales.update_layout(
                         paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
