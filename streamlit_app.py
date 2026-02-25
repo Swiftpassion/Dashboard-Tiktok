@@ -805,6 +805,27 @@ elif page == "กราฟเทียบยอดขายเฉพาะสิ
     with st.spinner("กำลังโหลดข้อมูล Stock และยอดขาย..."):
         # แก้ไข Error: กำหนดตัวแปรสำหรับเชื่อมต่อ Supabase ก่อนส่งเข้าฟังก์ชัน
         supabase_client = init_connection()  
+
+    # ==========================================================
+    # 🔍 โค้ดส่วนตรวจสอบปัญหา (เดี๋ยวเราค่อยลบออกทีหลัง)
+    # ==========================================================
+    try:
+        supabase_client = init_connection()
+        
+        # 1. ขอดูข้อมูล 5 บรรทัดแรก เพื่อดูรูปแบบวันที่และคอลัมน์
+        res_debug = supabase_client.table("orders").select('"Warehouse Name", "Shipped Time", "Seller SKU", "Quantity"').limit(5).execute()
+        st.write("🔍 [Debug 1] ข้อมูลดิบ 5 แถวแรกใน Supabase:", pd.DataFrame(res_debug.data))
+        
+        # 2. ขอดูชื่อ Warehouse ทั้งหมดที่มีในระบบ (เพื่อเช็คการสะกด)
+        res_wh = supabase_client.table("orders").select('"Warehouse Name"').execute()
+        df_wh = pd.DataFrame(res_wh.data)
+        if not df_wh.empty:
+            st.write("🏢 [Debug 2] รายชื่อ Warehouse ทั้งหมดในระบบ:", df_wh["Warehouse Name"].unique())
+            
+    except Exception as e:
+        st.error(f"เกิด Error ตอนพยายามตรวจสอบข้อมูล: {e}")
+    # ==========================================================
+
         df_chart = fetch_secondhand_data(supabase_client, start_date, end_date)
 
     if df_chart.empty:
