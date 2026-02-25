@@ -738,16 +738,24 @@ elif page == "กราฟเทียบยอดขายเฉพาะสิ
             df_sales = pd.DataFrame(res_sales.data)
             
             if not df_sales.empty:
+                # แก้ไข 1: บังคับให้ Quantity เป็นตัวเลข (ตัวไหนเป็นค่าว่างให้เปลี่ยนเป็น 0)
+                df_sales["Quantity"] = pd.to_numeric(df_sales["Quantity"], errors="coerce").fillna(0)
+                
+                # ทำการ Group และ บวกยอดขาย
                 df_sold = df_sales.groupby("Seller SKU")["Quantity"].sum().reset_index()
                 df_sold.rename(
                     columns={"Seller SKU": "product_name", "Quantity": "sold_qty"}, 
                     inplace=True
                 )
-                # สร้าง merge_key เพื่อใช้เปรียบเทียบ โดยตัดเว้นวรรคและทำเป็นตัวพิมพ์เล็ก
                 df_sold["merge_key"] = df_sold["product_name"].astype(str).str.strip().str.lower()
+                
+                # --- ตรวจสอบข้อมูล (เพิ่มบรรทัดนี้ชั่วคราว) ---
+                st.write("🔍 ตรวจสอบ: ข้อมูลยอดขายที่ดึงมาได้", df_sold)
+                
             else:
                 df_sold = pd.DataFrame(columns=["product_name", "sold_qty", "merge_key"])
-
+                # --- ตรวจสอบข้อมูล (เพิ่มบรรทัดนี้ชั่วคราว) ---
+                st.write("🔍 ตรวจสอบ: ดึงยอดขายไม่ได้เลย (พบ 0 รายการ)")
             # 2. Fetch Remaining Stock (Always Current)
             res_stock = supabase_client.table("secondhand_stock") \
                 .select("product_name, stock_qty") \
