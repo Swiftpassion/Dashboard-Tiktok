@@ -228,10 +228,11 @@ with st.sidebar:
     page = st.radio(
         "เลือกหน้าแสดงผล:",
         [
-            "ภาพรวมยอดขาย", 
-            "เปรียบเทียบรายการสินค้า", 
+            "ภาพรวมยอดขาย",
+            "เปรียบเทียบรายการสินค้า",
             "กราฟเส้นยอดขายรายวัน",
-            "ตะกร้าสินค้าร้าน Sim1 กับ Sim2"
+            "ตะกร้าสินค้าร้าน Sim1 กับ Sim2",
+            "กราฟเทียบยอดขายเฉพาะสินค้ามือ 2"
         ],
         index=0
     )
@@ -673,5 +674,145 @@ elif page == "กราฟเส้นยอดขายรายวัน":
             height=600,
             margin=dict(l=20, r=20, t=50, b=20)
         )
+
+        st.plotly_chart(fig, use_container_width=True)
+# =================================================================================
+# CASE 5: SECOND-HAND SALES VS STOCK
+# =================================================================================
+elif page == "กราฟเทียบยอดขายเฉพาะสินค้ามือ 2":
+    st.markdown(
+        '<div class="shop-header-sarabun">📊 เทียบยอดขาย และ Stock คงเหลือ (ร้านมือ 2)</div>', 
+        unsafe_allow_html=True
+    )
+    st.markdown("---")
+
+    # --- 1. Date Filter UI สำหรับกรองยอดขาย ---
+    col_date, col_space = st.columns([3, 7])
+    with col_date:
+        st.markdown("##### 📅 เลือกช่วงวันที่ต้องการดูยอดขาย")
+        date_range = st.date_input(
+            "ช่วงวันที่ขายสินค้า:",
+            value=(datetime.date.today() - datetime.timedelta(days=7), datetime.date.today()),
+            key="secondhand_date_filter"
+        )
+
+    # ตรวจสอบว่าผู้ใช้เลือกวันที่ครบทั้ง เริ่มต้น - สิ้นสุด หรือยัง
+    if isinstance(date_range, tuple) and len(date_range) == 2:
+        start_date, end_date = date_range
+    else:
+        st.info("กรุณาเลือกวันที่เริ่มต้นและสิ้นสุดให้ครบถ้วนเพื่อดูข้อมูลยอดขาย")
+        st.stop()
+
+    # --- 2. Data Fetching Logic ---
+    def fetch_secondhand_data(
+        supabase_client, 
+        start_dt: datetime.date, 
+        end_dt: datetime.date
+    ) -> pd.DataFrame:
+        """
+        Fetches sales data (filtered by date) and current stock from Supabase,
+        then merges them for visualization.
+
+        Args:
+            supabase_client: The initialized Supabase client.
+            start_dt (datetime.date): The start date to filter sales.
+            end_dt (datetime.date): The end date to filter sales.
+
+        Returns:
+            pd.DataFrame: A melted dataframe ready for Plotly grouped bar chart.
+                          Contains ['product_name', 'data_type', 'quantity'].
+        """
+        try:
+            # 1. Fetch Sales (Sold Quantity - Filtered by Date)
+            # หมายเหตุ: หาก Column วันที่ใน Supabase ของคุณชื่ออื่น เช่น 'Created at' ให้เปลี่ยนคำว่า "Date" ด้านล่าง
+            start_str = start_dt.strftime("%Y-%m-%d")
+            end_str = end_dt.strftime("%Y-%m-%d 23:59:59") 
+
+            res_sales = supabase_client.table("orders") \
+                .select("Product Name, Quantity") \
+                .eq("Warehouse Name", "มือ 2") \
+                .gte("Date", start_str) \
+                .lte("Date", end_str) \
+                .execute()
+            
+            df_sales = pd.DataFrame(res_sales.data)
+            
+            if not df_sales.empty:
+                df_sold = df_sales.groupby("Product Name")["Quantity"].sum().reset_index()
+                df_sold.rename(
+                    columns={"Product Name": "product_name", "Quantity": "sold_qty"}, 
+                    inplace=True
+                )
+            else:
+                df_sold = pd.DataFrame(columns=["product_name", "sold_qty"])
+
+            # 2. Fetch Remaining Stock (Always Current - NO Date Filter)
+            res_stock = supabase_client.table("secondhand_stock") \
+                .select("product_name, stock_qty") \
+                .execute()
+            
+            df_stock = pd.DataFrame(res_stock.data)
+            
+            if df_stock.empty:
+                df_stock = pd.DataFrame(columns=["product_name", "stock_qty"])
+
+            # 3. Merge Data (Outer join)
+            df_merged = pd.merge(df_stock, df_sold, on="product_name", how="outer")
+            df_merged.fillna(0, inplace=True) 
+
+            # 4. Melt DataFrame for Plotly (Long Format)
+            df_melted = df_merged.melt(
+                id_vars="product_name", 
+                value_vars=["stock_qty", "sold_qty"],
+                var_name="data_type", 
+                value_name="quantity"
+            )
+            
+            label_map = {"stock_qty": "Stock คงเหลือ", "sold_qty": "ยอดขาย (Sold)"}
+            df_melted["data_type"] = df_melted["data_type"].map(label_map)
+            
+            return df_melted
+
+        except Exception as e:
+            logger.error(f"Error fetching second-hand data: {e}", exc_info=True)
+            return pd.DataFrame()
+
+    # --- 3. Render Chart ---
+    with st.spinner("กำลังโหลดข้อมูล Stock และยอดขาย..."):
+        # ส่งค่า start_date และ end_date เข้าไปในฟังก์ชัน
+        df_chart = fetch_secondhand_data(supabase, start_date, end_date)
+
+    if df_chart.empty:
+        st.warning("⚠️ ไม่พบข้อมูลสำหรับสร้างกราฟในระบบ")
+    else:
+        # อัปเดต Title กราฟให้แสดงช่วงวันที่ที่เลือก
+        chart_title = (
+            f"เปรียบเทียบยอดขาย ({start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')}) "
+            f"และ Stock สินค้ามือ 2 ปัจจุบัน"
+        )
+        
+        fig = px.bar(
+            df_chart,
+            x="product_name",
+            y="quantity",
+            color="data_type",
+            barmode="group",
+            text_auto=True,
+            color_discrete_map={"Stock คงเหลือ": "#00bcd4", "ยอดขาย (Sold)": "#ff5722"},
+            title=chart_title
+        )
+        
+        fig.update_layout(
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='white', family='Noto Sans Thai'),
+            xaxis=dict(showgrid=False, title="ชื่อสินค้า (Product)"),
+            yaxis=dict(showgrid=True, gridcolor='#333', title="จำนวน (ชิ้น)"),
+            hovermode="x unified",
+            legend_title_text="ประเภทข้อมูล",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        )
+        
+        fig.update_traces(textposition="outside", textfont=dict(size=12))
 
         st.plotly_chart(fig, use_container_width=True)
