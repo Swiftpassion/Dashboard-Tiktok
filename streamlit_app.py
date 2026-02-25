@@ -676,6 +676,7 @@ elif page == "กราฟเส้นยอดขายรายวัน":
         )
 
         st.plotly_chart(fig, use_container_width=True)
+        
 # =================================================================================
 # CASE 5: SECOND-HAND SALES VS STOCK
 # =================================================================================
@@ -711,7 +712,7 @@ elif page == "กราฟเทียบยอดขายเฉพาะสิ
     ) -> pd.DataFrame:
         """
         Fetches sales data (filtered by date) and current stock from Supabase,
-        then merges them for visualization.
+        cleans the product names for accurate merging, and prepares visualization data.
 
         Args:
             supabase_client: The initialized Supabase client.
@@ -723,12 +724,10 @@ elif page == "กราฟเทียบยอดขายเฉพาะสิ
                           Contains ['product_name', 'data_type', 'quantity'].
         """
         try:
-            # 1. Fetch Sales (Sold Quantity - Filtered by Date)
-            # หมายเหตุ: หาก Column วันที่ใน Supabase ของคุณชื่ออื่น เช่น 'Created at' ให้เปลี่ยนคำว่า "Date" ด้านล่าง
             start_str = start_dt.strftime("%Y-%m-%d")
             end_str = end_dt.strftime("%Y-%m-%d 23:59:59") 
 
-            # โค้ดใหม่ที่ดึง Seller SKU
+            # 1. Fetch Sales (Using "Seller SKU" to match with Stock)
             res_sales = supabase_client.table("orders") \
                 .select('"Seller SKU", Quantity') \
                 .eq("Warehouse Name", "มือ 2") \
@@ -739,30 +738,42 @@ elif page == "กราฟเทียบยอดขายเฉพาะสิ
             df_sales = pd.DataFrame(res_sales.data)
             
             if not df_sales.empty:
-                # Group by ด้วย Seller SKU
                 df_sold = df_sales.groupby("Seller SKU")["Quantity"].sum().reset_index()
-                
-                # เปลี่ยนชื่อคอลัมน์จาก Seller SKU ให้เป็น product_name 
-                # เพื่อให้สามารถนำไปจับคู่ (Merge) กับตาราง Stock ได้แบบพอดีเป๊ะ
                 df_sold.rename(
                     columns={"Seller SKU": "product_name", "Quantity": "sold_qty"}, 
                     inplace=True
                 )
+                # สร้าง merge_key เพื่อใช้เปรียบเทียบ โดยตัดเว้นวรรคและทำเป็นตัวพิมพ์เล็ก
+                df_sold["merge_key"] = df_sold["product_name"].astype(str).str.strip().str.lower()
             else:
-                df_sold = pd.DataFrame(columns=["product_name", "sold_qty"])
+                df_sold = pd.DataFrame(columns=["product_name", "sold_qty", "merge_key"])
 
-            # 2. Fetch Remaining Stock (Always Current - NO Date Filter)
+            # 2. Fetch Remaining Stock (Always Current)
             res_stock = supabase_client.table("secondhand_stock") \
                 .select("product_name, stock_qty") \
                 .execute()
             
             df_stock = pd.DataFrame(res_stock.data)
             
-            if df_stock.empty:
-                df_stock = pd.DataFrame(columns=["product_name", "stock_qty"])
+            if not df_stock.empty:
+                # สร้าง merge_key รูปแบบเดียวกัน
+                df_stock["merge_key"] = df_stock["product_name"].astype(str).str.strip().str.lower()
+            else:
+                df_stock = pd.DataFrame(columns=["product_name", "stock_qty", "merge_key"])
 
-            # 3. Merge Data (Outer join)
-            df_merged = pd.merge(df_stock, df_sold, on="product_name", how="outer")
+            # 3. Merge Data (ใช้ merge_key เพื่อความแม่นยำ 100%)
+            df_merged = pd.merge(
+                df_stock, 
+                df_sold, 
+                on="merge_key", 
+                how="outer", 
+                suffixes=("_stock", "_sold")
+            )
+            
+            # ดึงชื่อต้นฉบับกลับมาใช้งาน (ถ้ามีชื่อใน Stock ให้ใช้ชื่อนั้นก่อน ถ้าไม่มีให้ใช้จาก Sales)
+            if not df_merged.empty:
+                df_merged["product_name"] = df_merged["product_name_stock"].combine_first(df_merged["product_name_sold"])
+            
             df_merged.fillna(0, inplace=True) 
 
             # 4. Melt DataFrame for Plotly (Long Format)
@@ -784,12 +795,12 @@ elif page == "กราฟเทียบยอดขายเฉพาะสิ
 
     # --- 3. Render Chart ---
     with st.spinner("กำลังโหลดข้อมูล Stock และยอดขาย..."):
-        # เรียกใช้ connection ของ Supabase ก่อนส่งเข้าฟังก์ชัน
-        supabase_client = init_connection()
+        # แก้ไข Error: กำหนดตัวแปรสำหรับเชื่อมต่อ Supabase ก่อนส่งเข้าฟังก์ชัน
+        supabase_client = init_connection()  
         df_chart = fetch_secondhand_data(supabase_client, start_date, end_date)
 
     if df_chart.empty:
-        st.warning("⚠️ ไม่พบข้อมูลสำหรับสร้างกราฟในระบบ")
+        st.warning("⚠️ ไม่พบข้อมูลยอดขายหรือ Stock สินค้ามือ 2 ในระบบ หรือข้อมูลไม่ตรงกัน")
     else:
         # อัปเดต Title กราฟให้แสดงช่วงวันที่ที่เลือก
         chart_title = (
