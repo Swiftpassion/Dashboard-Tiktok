@@ -728,8 +728,9 @@ elif page == "กราฟเทียบยอดขายเฉพาะสิ
             start_str = start_dt.strftime("%Y-%m-%d")
             end_str = end_dt.strftime("%Y-%m-%d 23:59:59") 
 
+            # โค้ดใหม่ที่ดึง Seller SKU
             res_sales = supabase_client.table("orders") \
-                .select("Product Name, Quantity") \
+                .select('"Seller SKU", Quantity') \
                 .eq("Warehouse Name", "มือ 2") \
                 .gte("Date", start_str) \
                 .lte("Date", end_str) \
@@ -738,9 +739,13 @@ elif page == "กราฟเทียบยอดขายเฉพาะสิ
             df_sales = pd.DataFrame(res_sales.data)
             
             if not df_sales.empty:
-                df_sold = df_sales.groupby("Product Name")["Quantity"].sum().reset_index()
+                # Group by ด้วย Seller SKU
+                df_sold = df_sales.groupby("Seller SKU")["Quantity"].sum().reset_index()
+                
+                # เปลี่ยนชื่อคอลัมน์จาก Seller SKU ให้เป็น product_name 
+                # เพื่อให้สามารถนำไปจับคู่ (Merge) กับตาราง Stock ได้แบบพอดีเป๊ะ
                 df_sold.rename(
-                    columns={"Product Name": "product_name", "Quantity": "sold_qty"}, 
+                    columns={"Seller SKU": "product_name", "Quantity": "sold_qty"}, 
                     inplace=True
                 )
             else:
