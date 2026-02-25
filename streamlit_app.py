@@ -71,7 +71,7 @@ st.markdown("""
             
     input[class*="st-"] {
         color: #ffffff !important;
-        font-size: 30px !important;
+        font-size: 22px !important;
         font-weight: 700 !important;
         font-family: 'Noto Sans Thai', sans-serif !important;
         height: auto !important;
@@ -688,7 +688,7 @@ elif page == "กราฟเทียบยอดขายเฉพาะสิ
     st.markdown("---")
 
     # --- 1. Date Filter UI สำหรับกรองยอดขาย ---
-    col_date, col_space = st.columns([3, 7])
+    col_date, col_space = st.columns([1.5, 8.5])
     with col_date:
         st.markdown("##### 📅 เลือกช่วงวันที่ต้องการดูยอดขาย")
         date_range = st.date_input(
