@@ -697,94 +697,56 @@ elif page == "กราฟเทียบยอดขายเฉพาะสิ
             key="secondhand_date_filter"
         )
 
-    # ตรวจสอบว่าผู้ใช้เลือกวันที่ครบทั้ง เริ่มต้น - สิ้นสุด หรือยัง
     if isinstance(date_range, tuple) and len(date_range) == 2:
         start_date, end_date = date_range
     else:
         st.info("กรุณาเลือกวันที่เริ่มต้นและสิ้นสุดให้ครบถ้วนเพื่อดูข้อมูลยอดขาย")
         st.stop()
 
-    # --- 2. Data Fetching Logic ---
+    # --- 2. Data Fetching Logic (ปรับใหม่: ใช้ตัวแปร df ที่แปลงวันที่ถูกต้องแล้ว) ---
     def fetch_secondhand_data(
+        df_all: pd.DataFrame,
         supabase_client, 
         start_dt: datetime.date, 
         end_dt: datetime.date
     ) -> pd.DataFrame:
-        """
-        Fetches sales data (filtered by date) and current stock from Supabase,
-        cleans the product names for accurate merging, and prepares visualization data.
-
-        Args:
-            supabase_client: The initialized Supabase client.
-            start_dt (datetime.date): The start date to filter sales.
-            end_dt (datetime.date): The end date to filter sales.
-
-        Returns:
-            pd.DataFrame: A melted dataframe ready for Plotly grouped bar chart.
-                          Contains ['product_name', 'data_type', 'quantity'].
-        """
         try:
-            start_str = start_dt.strftime("%Y-%m-%d")
-            end_str = end_dt.strftime("%Y-%m-%d 23:59:59") 
-
-            # 1. Fetch Sales (Using "Seller SKU" to match with Stock)
-            res_sales = supabase_client.table("orders") \
-                .select('"Seller SKU", "Quantity"') \
-                .eq("Warehouse Name", "มือ 2") \
-                .gte("Shipped Time", start_str) \
-                .lte("Shipped Time", end_str) \
-                .execute()
-            
-            df_sales = pd.DataFrame(res_sales.data)
+            # 1. Fetch Sales: ดึงจาก df_all แทนการไป Query ใหม่ (แก้ปัญหาวันที่ไม่ตรง)
+            mask_shop = df_all["Warehouse Name"].astype(str).str.strip() == "มือ 2"
+            mask_date = (df_all["Date"] >= start_dt) & (df_all["Date"] <= end_dt)
+            df_sales = df_all[mask_shop & mask_date].copy()
             
             if not df_sales.empty:
-                # แก้ไข 1: บังคับให้ Quantity เป็นตัวเลข (ตัวไหนเป็นค่าว่างให้เปลี่ยนเป็น 0)
+                # บังคับ Quantity เป็นตัวเลขและรวมยอด (Sum)
                 df_sales["Quantity"] = pd.to_numeric(df_sales["Quantity"], errors="coerce").fillna(0)
-                
-                # ทำการ Group และ บวกยอดขาย
                 df_sold = df_sales.groupby("Seller SKU")["Quantity"].sum().reset_index()
                 df_sold.rename(
                     columns={"Seller SKU": "product_name", "Quantity": "sold_qty"}, 
                     inplace=True
                 )
                 df_sold["merge_key"] = df_sold["product_name"].astype(str).str.strip().str.lower()
-                
-                # --- ตรวจสอบข้อมูล (เพิ่มบรรทัดนี้ชั่วคราว) ---
-                st.write("🔍 ตรวจสอบ: ข้อมูลยอดขายที่ดึงมาได้", df_sold)
-                
             else:
                 df_sold = pd.DataFrame(columns=["product_name", "sold_qty", "merge_key"])
-                # --- ตรวจสอบข้อมูล (เพิ่มบรรทัดนี้ชั่วคราว) ---
-                st.write("🔍 ตรวจสอบ: ดึงยอดขายไม่ได้เลย (พบ 0 รายการ)")
-            # 2. Fetch Remaining Stock (Always Current)
-            res_stock = supabase_client.table("secondhand_stock") \
-                .select("product_name, stock_qty") \
-                .execute()
-            
+
+            # 2. Fetch Remaining Stock: ไปดึงข้อมูลอัปเดตปัจจุบันจาก Database
+            res_stock = supabase_client.table("secondhand_stock").select("product_name, stock_qty").execute()
             df_stock = pd.DataFrame(res_stock.data)
             
             if not df_stock.empty:
-                # สร้าง merge_key รูปแบบเดียวกัน
                 df_stock["merge_key"] = df_stock["product_name"].astype(str).str.strip().str.lower()
             else:
                 df_stock = pd.DataFrame(columns=["product_name", "stock_qty", "merge_key"])
 
-            # 3. Merge Data (ใช้ merge_key เพื่อความแม่นยำ 100%)
-            df_merged = pd.merge(
-                df_stock, 
-                df_sold, 
-                on="merge_key", 
-                how="outer", 
-                suffixes=("_stock", "_sold")
-            )
+            # 3. Merge Data: เอาสต๊อกกับยอดขายมาชนกันด้วย merge_key (ชื่อตัวเล็ก)
+            df_merged = pd.merge(df_stock, df_sold, on="merge_key", how="outer", suffixes=("_stock", "_sold"))
             
-            # ดึงชื่อต้นฉบับกลับมาใช้งาน (ถ้ามีชื่อใน Stock ให้ใช้ชื่อนั้นก่อน ถ้าไม่มีให้ใช้จาก Sales)
+            # ใช้ชื่อที่มีให้ครบถ้วน 
             if not df_merged.empty:
                 df_merged["product_name"] = df_merged["product_name_stock"].combine_first(df_merged["product_name_sold"])
             
             df_merged.fillna(0, inplace=True) 
 
-            # 4. Melt DataFrame for Plotly (Long Format)
+            # 4. Melt DataFrame เพื่อแปลงเข้ากราฟ Plotly
             df_melted = df_merged.melt(
                 id_vars="product_name", 
                 value_vars=["stock_qty", "sold_qty"],
@@ -803,33 +765,14 @@ elif page == "กราฟเทียบยอดขายเฉพาะสิ
 
     # --- 3. Render Chart ---
     with st.spinner("กำลังโหลดข้อมูล Stock และยอดขาย..."):
-        supabase_client = init_connection()
+        supabase_client = init_connection()  
         
-        # ==========================================================
-        # 🔍 โค้ดส่วนตรวจสอบปัญหา
-        # ==========================================================
-        try:
-            # 1. ขอดูข้อมูล 5 บรรทัดแรก เพื่อดูรูปแบบวันที่และคอลัมน์
-            res_debug = supabase_client.table("orders").select('"Warehouse Name", "Shipped Time", "Seller SKU", "Quantity"').limit(5).execute()
-            st.write("🔍 [Debug 1] ข้อมูลดิบ 5 แถวแรกใน Supabase:", pd.DataFrame(res_debug.data))
-            
-            # 2. ขอดูชื่อ Warehouse ทั้งหมดที่มีในระบบ (เพื่อเช็คการสะกด)
-            res_wh = supabase_client.table("orders").select('"Warehouse Name"').execute()
-            df_wh = pd.DataFrame(res_wh.data)
-            if not df_wh.empty:
-                st.write("🏢 [Debug 2] รายชื่อ Warehouse ทั้งหมดในระบบ:", df_wh["Warehouse Name"].unique())
-        except Exception as e:
-            st.error(f"เกิด Error ตอนพยายามตรวจสอบข้อมูล: {e}")
-        # ==========================================================
+        # สิ่งที่เปลี่ยน: ส่งตัวแปร `df` (ข้อมูลรวมของแอป) เข้าไปเป็น Parameter ตัวแรกด้วย
+        df_chart = fetch_secondhand_data(df, supabase_client, start_date, end_date)
 
-        # ดึงข้อมูลยอดขายและ Stock มาใส่ตัวแปร df_chart (บรรทัดนี้ต้องอยู่ระดับเดียวกับ try)
-        df_chart = fetch_secondhand_data(supabase_client, start_date, end_date)
-
-    # เช็คว่ามีข้อมูลหรือไม่ (บรรทัดนี้ต้องอยู่ระดับเดียวกับ with st.spinner)
     if df_chart.empty:
         st.warning("⚠️ ไม่พบข้อมูลยอดขายหรือ Stock สินค้ามือ 2 ในระบบ หรือข้อมูลไม่ตรงกัน")
     else:
-        # อัปเดต Title กราฟให้แสดงช่วงวันที่ที่เลือก
         chart_title = (
             f"เปรียบเทียบยอดขาย ({start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')}) "
             f"และ Stock สินค้ามือ 2 ปัจจุบัน"
@@ -858,5 +801,4 @@ elif page == "กราฟเทียบยอดขายเฉพาะสิ
         )
         
         fig.update_traces(textposition="outside", textfont=dict(size=12))
-
         st.plotly_chart(fig, use_container_width=True)
