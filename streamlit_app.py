@@ -997,7 +997,7 @@ elif page == "กราฟเทียบยอดขายเฉพาะสิ
                     st.plotly_chart(fig_worst, use_container_width=True)
 
                 with col_table:
-                    st.markdown("<br><h5>📑 ตารางข้อมูลเชิงลึก</h5>", unsafe_allow_html=True)
+                    st.markdown("<br><h5>📑 ตารางสินค้าที่มียอดขายแย่ และ Stock คงเหลือเยอะ</h5>", unsafe_allow_html=True)
                     
                     # เตรียมข้อมูลสำหรับแสดงในตารางให้สวยงาม
                     df_display = df_worst_sales[["product_name", col_stock, col_sold]].copy()
@@ -1019,3 +1019,44 @@ elif page == "กราฟเทียบยอดขายเฉพาะสิ
                     
                     # แสดงตารางบนหน้าเว็บ
                     st.dataframe(df_display, use_container_width=True)
+
+            # ==========================================================
+            # 📌 ส่วนเพิ่มเติม 3: ตารางสรุปข้อมูลยอดขายและ Stock (ทั้งหมด)
+            # ==========================================================
+            st.markdown(
+                "<br><br><h4 style='text-align: center;'>📋 ตารางสรุปข้อมูลยอดขายและ Stock ทั้งหมด (ตามช่วงเวลาที่เลือก)</h4><hr>", 
+                unsafe_allow_html=True
+            )
+
+            # เราจะดึงข้อมูลดั้งเดิมทั้งหมด (ที่ยังไม่ถูกตัดสายชาร์จ/อะแดปเตอร์ออก) มาทำตาราง
+            df_full_wide = df_chart.pivot(index="product_name", columns="data_type", values="quantity").reset_index()
+            
+            # เช็คความปลอดภัยของข้อมูล
+            if "Stock คงเหลือ" in df_full_wide.columns and "ยอดขาย (Sold)" in df_full_wide.columns:
+                
+                # เลือกเฉพาะคอลัมน์ที่ต้องการ
+                df_full_display = df_full_wide[["product_name", "Stock คงเหลือ", "ยอดขาย (Sold)"]].copy()
+                
+                # เปลี่ยนชื่อคอลัมน์ตาม Requirement
+                df_full_display.rename(columns={
+                    "product_name": "ชื่อสินค้า",
+                    "Stock คงเหลือ": "ยอดคงเหลือใน Stock",
+                    "ยอดขาย (Sold)": "ยอดขาย"
+                }, inplace=True)
+                
+                # จัดเรียงลำดับ: ให้สินค้าที่ขายได้เยอะที่สุดขึ้นมาก่อน 
+                # (หากอยากเรียงตามชื่อสินค้า ให้เปลี่ยนเป็น by="ชื่อสินค้า" และ ascending=True)
+                df_full_display = df_full_display.sort_values(by="ยอดขาย", ascending=False)
+                
+                # จัดการตัวเลขให้เป็นจำนวนเต็มสวยๆ (ไม่มี .0)
+                df_full_display["ยอดคงเหลือใน Stock"] = df_full_display["ยอดคงเหลือใน Stock"].fillna(0).astype(int)
+                df_full_display["ยอดขาย"] = df_full_display["ยอดขาย"].fillna(0).astype(int)
+                
+                # รีเซ็ตตัวเลขลำดับแถว (Index) ให้เริ่มจาก 1
+                df_full_display.reset_index(drop=True, inplace=True)
+                df_full_display.index += 1
+                
+                # แสดงตาราง (กำหนด height=500 เพื่อให้สามารถ Scroll ดูลงมาได้ยาวๆ แบบไม่เกะกะหน้าจอ)
+                st.dataframe(df_full_display, use_container_width=True, height=500)
+            else:
+                st.info("ไม่สามารถสร้างตารางสรุปได้ เนื่องจากข้อมูลไม่ครบถ้วน")
