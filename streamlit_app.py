@@ -942,3 +942,54 @@ elif page == "กราฟเทียบยอดขายเฉพาะสิ
                     )
                     fig_sales.update_traces(textposition="outside", textfont=dict(size=12))
                     st.plotly_chart(fig_sales, use_container_width=True)
+                    
+            # ==========================================================
+            # 📌 ส่วนเพิ่มเติม 2: กราฟ "ยอดขายแย่ที่สุด แต่ Stock เหลือเยอะ" (Dead Stock)
+            # ==========================================================
+            st.markdown(
+                "<br><br><h4 style='text-align: center;'>⚠️ แจ้งเตือนสินค้าค้างสต๊อก (ยอดขายน้อย แต่ Stock เหลือเยอะ) Top 10</h4><hr>", 
+                unsafe_allow_html=True
+            )
+
+            # Logic: เรียงลำดับจาก "ยอดขายน้อยที่สุด" (Ascending=True) 
+            # และจัดเรียงตัวที่มี "Stock มากที่สุด" ให้อยู่บนสุด (Ascending=False)
+            df_worst_sales = df_wide.sort_values(
+                by=[col_sold, col_stock], 
+                ascending=[True, False]
+            ).head(10)
+            
+            if df_worst_sales.empty:
+                st.info("ไม่มีข้อมูลสินค้าค้างสต๊อกครับ")
+            else:
+                # แปลงข้อมูลเป็น Long Format สำหรับ Plotly
+                df_worst_melted = df_worst_sales.melt(
+                    id_vars="product_name", 
+                    value_vars=[col_stock, col_sold],
+                    var_name="data_type", 
+                    value_name="quantity"
+                )
+                
+                fig_worst = px.bar(
+                    df_worst_melted,
+                    x="product_name",
+                    y="quantity",
+                    color="data_type",
+                    barmode="group",
+                    text_auto=True,
+                    color_discrete_map={col_stock: "#00bcd4", col_sold: "#ff5722"},
+                    title="⚠️ Top 10 สินค้าจมค้างสต๊อก (ยอดขายต่ำที่สุด & Stock คงเหลือสูงสุด)"
+                )
+                
+                fig_worst.update_layout(
+                    paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                    font=dict(color='white', family='Noto Sans Thai'),
+                    xaxis=dict(showgrid=False, title="ชื่อสินค้า (Product)"),
+                    yaxis=dict(showgrid=True, gridcolor='#333', title="จำนวน (ชิ้น)"),
+                    legend_title_text="",
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                )
+                
+                fig_worst.update_traces(textposition="outside", textfont=dict(size=12))
+                
+                # แสดงผลแบบเต็มความกว้างหน้าจอ (อยู่ด้านล่างกราฟ 2 ฝั่ง)
+                st.plotly_chart(fig_worst, use_container_width=True)
