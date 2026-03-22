@@ -175,7 +175,7 @@ def load_data() -> pd.DataFrame:
 def process_data(df: pd.DataFrame) -> pd.DataFrame:
     """
     Cleans and processes the raw dataframe for dashboard usage.
-    Handles date formatting and standardizes shop names and SKUs.
+    Handles mixed date formatting and standardizes shop names and SKUs.
     
     Args:
         df (pd.DataFrame): The raw dataframe loaded from the database.
@@ -184,8 +184,22 @@ def process_data(df: pd.DataFrame) -> pd.DataFrame:
         pd.DataFrame: The processed dataframe.
     """
     if 'Shipped Time' in df.columns:
-        df['Shipped Time'] = df['Shipped Time'].astype(str).str.replace(r'\t', '', regex=True)
-        df['Date_Obj'] = pd.to_datetime(df['Shipped Time'], dayfirst=True, errors='coerce')
+        df['Shipped Time Clean'] = df['Shipped Time'].astype(str).str.replace(r'\t', '', regex=True)
+        
+        try:
+            # Use format='mixed' to handle both DD/MM/YYYY and YYYY-MM-DD
+            df['Date_Obj'] = pd.to_datetime(
+                df['Shipped Time Clean'], 
+                format='mixed', 
+                dayfirst=True, 
+                errors='coerce'
+            )
+        except ValueError:
+            # Fallback for pandas versions that do not fully support mixed format
+            parsed_dayfirst = pd.to_datetime(df['Shipped Time Clean'], dayfirst=True, errors='coerce')
+            parsed_standard = pd.to_datetime(df['Shipped Time Clean'], errors='coerce')
+            df['Date_Obj'] = parsed_dayfirst.combine_first(parsed_standard)
+            
         df['Date'] = df['Date_Obj'].dt.date
     
     def map_shop(name: str) -> str:
@@ -193,7 +207,7 @@ def process_data(df: pd.DataFrame) -> pd.DataFrame:
         if pd.isna(name):
             return "Unknown"
         
-        # Clean whitespaces and fix double vowel typos
+        # Clean whitespaces and fix double vowel typos ("มืือ" -> "มือ")
         clean_name = str(name).strip()
         clean_name = re.sub(r'\s+', '', clean_name)
         clean_name = clean_name.replace("มืือ", "มือ")
@@ -266,7 +280,7 @@ def fetch_secondhand_data(
             logger.warning("No data returned from secondhand_stock table.")
             df_stock = pd.DataFrame(columns=["product_name", "stock_qty", "merge_key"])
 
-        # 3. Merge Data
+        # 3. Merge Data: Outer join ensures we see items with stock but no sales, and vice versa
         df_merged = pd.merge(df_stock, df_sold, on="merge_key", how="outer", suffixes=("_stock", "_sold"))
         
         if not df_merged.empty:
