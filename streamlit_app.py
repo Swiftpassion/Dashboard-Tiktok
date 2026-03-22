@@ -162,7 +162,8 @@ def load_data() -> pd.DataFrame:
     supabase = init_connection()
     try:
         response = supabase.table('orders').select(
-            '"Shipped Time", "Warehouse Name", "Seller SKU", "Product Name", "Quantity", "product_tag"'
+            '"Order ID", "Shipped Time", "Warehouse Name", "Seller SKU", "Product Name", '
+            '"Quantity", "product_tag"'
         ).execute()
         return pd.DataFrame(response.data)
     except Exception as e:
@@ -175,19 +176,31 @@ def load_data() -> pd.DataFrame:
 def process_data(df: pd.DataFrame) -> pd.DataFrame:
     """
     Cleans and processes the raw dataframe for dashboard usage.
-    Handles mixed date formatting and standardizes shop names and SKUs.
+    Drops empty rows, handles mixed date formatting, and standardizes names.
     
     Args:
         df (pd.DataFrame): The raw dataframe loaded from the database.
         
     Returns:
-        pd.DataFrame: The processed dataframe.
+        pd.DataFrame: The processed and cleaned dataframe.
     """
+    if df.empty:
+        return df
+
+    # 1. 🚨 Drop Garbage Data: Remove rows missing critical fields
+    if 'Order ID' in df.columns:
+        df = df.dropna(subset=['Order ID'])
+        df = df[df['Order ID'].astype(str).str.strip() != '']
+        
     if 'Shipped Time' in df.columns:
+        df = df.dropna(subset=['Shipped Time'])
+        df = df[df['Shipped Time'].astype(str).str.strip() != '']
+
+        # 2. Date Formatting
         df['Shipped Time Clean'] = df['Shipped Time'].astype(str).str.replace(r'\t', '', regex=True)
         
         try:
-            # Use format='mixed' to handle both DD/MM/YYYY and YYYY-MM-DD
+            # Handle mixed formats (e.g., DD/MM/YYYY and YYYY-MM-DD)
             df['Date_Obj'] = pd.to_datetime(
                 df['Shipped Time Clean'], 
                 format='mixed', 
@@ -195,11 +208,13 @@ def process_data(df: pd.DataFrame) -> pd.DataFrame:
                 errors='coerce'
             )
         except ValueError:
-            # Fallback for pandas versions that do not fully support mixed format
-            parsed_dayfirst = pd.to_datetime(df['Shipped Time Clean'], dayfirst=True, errors='coerce')
-            parsed_standard = pd.to_datetime(df['Shipped Time Clean'], errors='coerce')
-            df['Date_Obj'] = parsed_dayfirst.combine_first(parsed_standard)
+            # Fallback for older pandas versions
+            parsed_day = pd.to_datetime(df['Shipped Time Clean'], dayfirst=True, errors='coerce')
+            parsed_std = pd.to_datetime(df['Shipped Time Clean'], errors='coerce')
+            df['Date_Obj'] = parsed_day.combine_first(parsed_std)
             
+        # Drop rows where Date conversion failed (NaT) to prevent chart errors
+        df = df.dropna(subset=['Date_Obj'])
         df['Date'] = df['Date_Obj'].dt.date
     
     def map_shop(name: str) -> str:
@@ -207,7 +222,6 @@ def process_data(df: pd.DataFrame) -> pd.DataFrame:
         if pd.isna(name):
             return "Unknown"
         
-        # Clean whitespaces and fix double vowel typos ("มืือ" -> "มือ")
         clean_name = str(name).strip()
         clean_name = re.sub(r'\s+', '', clean_name)
         clean_name = clean_name.replace("มืือ", "มือ")
@@ -229,8 +243,11 @@ def process_data(df: pd.DataFrame) -> pd.DataFrame:
         s = re.sub(r'\b(gb|ram|rom)\b', '', s)
         return re.sub(r'\s+', ' ', s).strip().title()
 
-    df['Shop'] = df['Warehouse Name'].apply(map_shop)
-    df['Clean_SKU'] = df['Seller SKU'].apply(clean_sku)
+    if 'Warehouse Name' in df.columns:
+        df['Shop'] = df['Warehouse Name'].apply(map_shop)
+    if 'Seller SKU' in df.columns:
+        df['Clean_SKU'] = df['Seller SKU'].apply(clean_sku)
+        
     return df
 
 def fetch_secondhand_data(
@@ -259,7 +276,6 @@ def fetch_secondhand_data(
         
         if not df_sales.empty:
             df_sales["Quantity"] = pd.to_numeric(df_sales["Quantity"], errors="coerce").fillna(0)
-            # Use 'Clean_SKU' for proper grouping and merging
             df_sold = df_sales.groupby("Clean_SKU")["Quantity"].sum().reset_index()
             df_sold.rename(
                 columns={"Clean_SKU": "product_name", "Quantity": "sold_qty"}, 
@@ -280,7 +296,7 @@ def fetch_secondhand_data(
             logger.warning("No data returned from secondhand_stock table.")
             df_stock = pd.DataFrame(columns=["product_name", "stock_qty", "merge_key"])
 
-        # 3. Merge Data: Outer join ensures we see items with stock but no sales, and vice versa
+        # 3. Merge Data
         df_merged = pd.merge(df_stock, df_sold, on="merge_key", how="outer", suffixes=("_stock", "_sold"))
         
         if not df_merged.empty:
